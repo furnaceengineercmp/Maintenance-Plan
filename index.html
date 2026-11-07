@@ -715,7 +715,7 @@ async function boot(){
  $('bell').onclick=()=>{show('nt');if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();};
  $('proj').onchange=()=>{S.sid=gv('proj');refresh();};
  $('tz').value=S.cfg.TZ||'WITA';$('tz').onchange=()=>run(async()=>{const v=gv('tz');try{await call('saveTz',{tz:v});S.cfg.TZ=v;toast('Zona waktu: '+v);await refresh();}catch(e){$('tz').value=S.cfg.TZ||'WITA';throw e;}});
- fillProj();show('ov');
+ fillProj();show(S.sid?'ov':'ad');
  initPw();liveSync();setInterval(()=>S.sid&&!busy&&!document.hidden&&pollNotifs(),180000);
 }
 function fillProj(){lastSig=psig(S.projects);const sel=$('proj');sel.innerHTML=S.projects.map(p=>'<option value="'+p.shutdown_id+'">'+esc(pn(p.name))+(p.status!=='Active'?' ('+p.status+')':'')+'</option>').join('')||'<option value="">(belum ada project)</option>';
@@ -727,7 +727,7 @@ function show(t){S.tab=t;document.querySelectorAll('section').forEach(s=>s.class
 function paint(t){if(S.dirty[t]&&R[t]){S.dirty[t]=0;R[t]();redrawCharts();}}
 function rerender(){Object.keys(R).forEach(k=>S.dirty[k]=1);paint(S.tab);$('bc').textContent=S.notifs.length;}
 async function refresh(){
- if(!S.sid){S.tasks=[];S.power={schedule:[],intervals:[],activities:[]};S.notifs=[];['ov','mt','pw','an','nt'].forEach(k=>{const e=$('s-'+k);e.innerHTML='<div class="card">'+empty('Belum ada shutdown project. Buat di menu Admin.')+'</div>';e.dataset.init='';});Object.keys(R).forEach(k=>S.dirty[k]=0);return;}
+ if(!S.sid){S.tasks=[];S.power={schedule:[],intervals:[],activities:[]};S.notifs=[];['ov','mt','pw','an','nt'].forEach(k=>{const e=$('s-'+k);e.innerHTML='<div class="card">'+empty('Belum ada shutdown project. Buat di menu Admin.')+'</div>';e.dataset.init='';});Object.keys(R).forEach(k=>S.dirty[k]=0);S.dirty.ad=1;paint(S.tab);return;}
  await run(async()=>{const d=await call('snapshot',{shutdown_id:S.sid}); // 1 request untuk task + power + notifikasi
   S.tasks=d.tasks;S.power=d.power;S.notifs=d.notifs;rerender();alertNew();});}
 async function pollNotifs(){await run(async()=>{S.notifs=await call('getNotifs',{shutdown_id:S.sid});S.dirty.nt=1;paint(S.tab);$('bc').textContent=S.notifs.length;alertNew();});}
