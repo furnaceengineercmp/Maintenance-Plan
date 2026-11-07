@@ -745,7 +745,7 @@ function noteDlg(){const cur=S.power.note||'',init=cur?noteHTML(cur):'';
  modal('Catatan operasi','<div class="tb nb"><button type="button" class="b alt sm" data-cmd="bold"><b>B</b></button><button type="button" class="b alt sm" data-cmd="italic"><i>I</i></button><button type="button" class="b alt sm" data-cmd="underline"><u>U</u></button><button type="button" class="b alt sm" data-cmd="foreColor" data-v="#ef4444" style="color:#ef4444;font-weight:700">A merah</button><button type="button" class="b alt sm" data-cmd="hiliteColor" data-v="#fde047" style="background:#fde047;color:#000">Stabilo</button><button type="button" class="b alt sm" data-cmd="foreColor" data-v="#22c55e" style="color:#22c55e;font-weight:700">A hijau</button><button type="button" class="b alt sm" data-cmd="removeFormat">Hapus format</button></div><div id="on_t" contenteditable="true" style="min-height:260px;max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;line-height:1.55"></div><div class="mute" style="font-size:12px;margin-top:6px">Blok teks lalu klik tombol format. Teks yang ditempel masuk sebagai teks polos.</div>',
   async()=>{const h=cleanHtml($('on_t').innerHTML);await call('saveOpNote',{shutdown_id:S.sid,note:h.replace(/<br>|<div><\/div>|\s/g,'')?'<!--h-->'+h:''});rerender();toast('Catatan tersimpan');},'Simpan',1);
  const ed=$('on_t');ed.innerHTML=init;
- $('mb').querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{ed.focus();document.execCommand('styleWithCSS',false,true);document.execCommand(b.dataset.cmd,false,b.dataset.v||null);};});
+ $('mb').querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{ed.focus();document.execCommand('styleWithCSS',false,/Color$/.test(b.dataset.cmd));document.execCommand(b.dataset.cmd,false,b.dataset.v||null);};});
  ed.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));});}
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('[data-opnote]'))noteDlg();});
 
@@ -893,7 +893,7 @@ function joinDT(d,t){d=String(d||'').trim();t=String(t||'').trim();if(!d&&!t)ret
 function cleanHtml(h){const d=document.createElement('div');d.innerHTML=h;const OK={B:1,STRONG:1,I:1,EM:1,U:1,BR:1,P:1,DIV:1,SPAN:1,FONT:1,MARK:1},col=/^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\)|[a-z]+)$/i;
  const walk=n=>{[...n.childNodes].forEach(c=>{if(c.nodeType===3)return;if(c.nodeType!==1){c.remove();return;}walk(c);
   if(!OK[c.tagName]){if(/^(SCRIPT|STYLE)$/.test(c.tagName))c.remove();else c.replaceWith(...c.childNodes);return;}
-  const st=[];['color','background-color'].forEach(k=>{const v=c.style.getPropertyValue(k);if(v&&col.test(v.trim()))st.push(k+':'+v.trim());});
+  const st=[],okv={'color':col,'background-color':col,'font-weight':/^(bold|normal|[1-9]00)$/,'font-style':/^(italic|normal)$/,'text-decoration':/^(underline|line-through|none)$/,'text-decoration-line':/^(underline|line-through|none)$/};Object.keys(okv).forEach(k=>{const v=c.style.getPropertyValue(k).trim();if(v&&okv[k].test(v))st.push(k+':'+v);});
   const fc=c.tagName==='FONT'&&c.getAttribute('color');[...c.attributes].forEach(a=>c.removeAttribute(a.name));
   if(st.length)c.setAttribute('style',st.join(';'));else if(fc&&col.test(fc))c.setAttribute('style','color:'+fc);});};
  walk(d);return d.innerHTML;}
