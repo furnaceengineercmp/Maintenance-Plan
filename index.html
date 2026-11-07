@@ -94,6 +94,557 @@ tr.grp th{text-align:center;font-size:11px;letter-spacing:.6px;border-bottom:2px
 <main><section id="s-ov"></section><section id="s-mt"></section><section id="s-pw"></section><section id="s-tl"></section><section id="s-an"></section><section id="s-nt"></section><section id="s-ad"></section></main>
 <div id="ov"><div class="m" id="mb"></div></div><div id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+(function(){
+
+const Utilities={formatDate(d,tz,f){const off={'Asia/Jakarta':7,'Asia/Makassar':8,'Asia/Jayapura':9}[tz]||8,x=new Date(+d+off*36e5),p=n=>String(n).padStart(2,'0'),s=x.getUTCFullYear()+'-'+p(x.getUTCMonth()+1)+'-'+p(x.getUTCDate())+' '+p(x.getUTCHours())+':'+p(x.getUTCMinutes());return /ss/.test(f)?s+':'+p(x.getUTCSeconds()):s;},getUuid:()=>crypto.randomUUID()};
+const LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})},CacheService={getScriptCache:()=>({get(){return null;},put(){}})},PropertiesService={getScriptProperties:()=>({setProperty(){},getProperty(){return '0';}})};
+/* ---------- Skema sheet: nama sheet -> urutan kolom (SATU-SATUNYA sumber nama kolom) ---------- */
+const SCHEMA = {
+  USERS: ['user_id','username','full_name','role','salt','password_hash','active','created_at'],
+  SHUTDOWN_MASTER: ['shutdown_id','name','template_id','start_date','end_date','status','created_by','created_at'],
+  TEMPLATE_MASTER: ['template_id','name','active','created_at'],
+  TEMPLATE_FIELDS: ['field_id','template_id','field_name','field_type','options','sort','active'],
+  MAINTENANCE_DATA: ['task_id','shutdown_id','description','planned_start','planned_finish','planned_duration_h','actual_start','actual_finish','pic','progress','status','last_updated','updated_by','remark','archived'],
+  MAINTENANCE_VALUES: ['task_id','field_id','value'],
+  MAINTENANCE_LOG: ['log_id','task_id','updated_by','timestamp','field_name','old_value','new_value','remark'],
+  POWER_SCHEDULE: ['schedule_id','shutdown_id','phase','sequence','schedule_datetime','planned_power','planned_power_mode','planned_ghe','planned_ghe_mode','actual_datetime','actual_power','actual_ghe','actual_ghe_mode','remark','updated_by','updated_at'],
+  POWER_INTERVALS: ['interval_id','shutdown_id','phase','start_schedule_id','end_schedule_id','start_datetime','end_datetime','duration_h','planned_calcine','actual_calcine','calc_status','formula_version','planned_calcine_mode','actual_calcine_mode'],
+  OPERATIONAL_ACTIVITIES: ['activity_id','shutdown_id','phase','activity_name','planned_datetime','actual_datetime','status','remark','updated_by','updated_at','planned_end','actual_end'],
+  POWER_CHANGE_LOG: ['log_id','schedule_id','updated_by','timestamp','field_name','old_value','new_value','remark'],
+  NOTIFICATION_LOG: ['notif_id','shutdown_id','category','ref_id','message','created_at'],
+  POWER_SETTINGS: ['key','value','description'],
+  SETTINGS: ['key','value','description']
+};
+/* Fitur yang bisa dikunci password: [label, default]. Diubah dari Admin > Matriks izin (disimpan di SETTINGS: PERM_<fitur>). */
+const FEATURES = {
+  task_progress: ['Update progress task (slider)', 'OPEN'],
+  task_edit: ['Tambah / edit / arsip task & import Excel', 'PASSWORD'],
+  task_delete: ['Hapus task', 'PASSWORD'],
+  grid_edit: ['Ubah jadwal task lewat grid jam (seret kotak jam)', 'PASSWORD'],
+  project_delete: ['Hapus project permanen (beserta datanya)', 'PASSWORD'],
+  power_edit: ['Edit data power, GHE, actual & aktivitas operasional', 'OPEN'],
+  power_plan: ['Generate & hapus titik jadwal power', 'OPEN'],
+  project_edit: ['Buat / ubah shutdown project', 'OPEN'],
+  template_edit: ['Buat / edit template maintenance', 'PASSWORD'],
+  settings_edit: ['Pengaturan power & notifikasi', 'PASSWORD'],
+  tz_edit: ['Ubah zona waktu (WIB / WITA / WIT)', 'OPEN']
+};  // 'matrix_edit' (ubah matriks ini) selalu minta password
+const PW_SHEET = 'PASWORD';
+const FORMULA_LABEL = 'v2: Calcine(t/h)=Power(MW)x1000/GHE(kWh/t)';
+const PHASES = ['Ramp Down','Ramp Up'];
+
+/* ---------- Helper sheet ---------- */
+
+const MEMO = {};  // cache sheet selama 1 request; tetap sinkron saat menulis (tanpa baca ulang)
+const norm_ = (n, o) => { const x = {}; SCHEMA[n].forEach(k => x[k] = o[k] == null ? '' : String(o[k])); return x; };
+
+
+function add_(n, o) { addMany_(n, [o]); }
+
+
+function ensure_(n, k, v, d) { if (!rows_(n).some(r => r.key === k)) add_(n, { key: k, value: v, description: d }); }
+function cfg_() { const c = {}; rows_('POWER_SETTINGS').concat(rows_('SETTINGS')).forEach(r => { if (r.key.indexOf('OPNOTE_') !== 0) c[r.key] = r.value; }); c.TZ = tzKey_();
+  if (/^v1:/.test(c.FORMULA_VERSION || '')) c.FORMULA_VERSION = FORMULA_LABEL;   // rumus lama (tanpa x1000) otomatis diganti label baru
+  return c; }
+/* ---------- Zona waktu aplikasi (pengaturan SETTINGS: TZ) — tidak lagi mengikuti zona Apps Script ---------- */
+const TZ_MAP = { WIB: ['Asia/Jakarta', '+07:00'], WITA: ['Asia/Makassar', '+08:00'], WIT: ['Asia/Jayapura', '+09:00'] };
+let TZK = null;
+function tzKey_() {
+  if (TZK) return TZK; let k = 'WITA';
+  try { const r = rows_('SETTINGS').find(x => x.key === 'TZ'); if (r && TZ_MAP[r.value]) k = r.value; } catch (e) {}
+  return (TZK = k);
+}
+function tz_() { return TZ_MAP[tzKey_()][0]; }
+function ssTz_() { return SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(); }
+function now_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH:mm:ss'); } // timestamp server
+function id_(p) { return p + '-' + Utilities.getUuid().slice(0, 8).toUpperCase(); }
+function dt_(s) { // teks waktu lokal (WIB/WITA/WIT sesuai pengaturan) -> Date absolut
+  if (!s) return null; const t = String(s).replace(' ', 'T'); return new Date((t.length <= 10 ? t + 'T00:00' : t.slice(0, 16)) + ':00' + TZ_MAP[tzKey_()][1]);
+}
+function num_(v) { return (v === '' || v == null) ? NaN : Number(v); }
+
+/* ---------- Password & API ---------- */
+
+
+
+
+
+/* ---------- Penanda perubahan data (dipakai browser untuk sinkron antar device) ---------- */
+function bumpRev_() { try { PropertiesService.getScriptProperties().setProperty('REV', String(Date.now())); } catch (e) {} }
+
+/* ---------- Maintenance ---------- */
+function taskDeco_(t, cfg) {
+  const pr = Number(t.progress) || 0, n = new Date(), pf = dt_(t.planned_finish), ps = dt_(t.planned_start);
+  t.status = pr >= 100 ? 'Completed' : pr > 0 ? 'Ongoing' : 'Not Started';
+  t.deadline = pr >= 100 ? 'Completed' : (pf && n > pf) ? 'Overdue' : (pf && pf - n <= Number(cfg.APPROACH_H || 24) * 3600000) ? 'Approaching' : 'On Schedule';
+  t.delayed_start = pr === 0 && ps && n > ps ? 'Y' : '';
+  return t;
+}
+const LOGQ = { MAINTENANCE_LOG: [], POWER_CHANGE_LOG: [] };  // log dikumpulkan lalu ditulis sekali (flushLogs_)
+function flushLogs_() { Object.keys(LOGQ).forEach(n => { if (LOGQ[n].length) addMany_(n, LOGQ[n].splice(0)); }); }
+function logM_(tid, u, f, o, n, rem, ts) {
+  LOGQ.MAINTENANCE_LOG.push({ _sid: sidOf_(tid), log_id: id_('MLG'), task_id: tid, updated_by: u.username, timestamp: ts, field_name: f, old_value: o, new_value: n, remark: rem || '' });
+}
+function oneTask_(tid) {
+  const t = rows_('MAINTENANCE_DATA').find(x => x.task_id === tid); if (!t) return null;
+  const c = {}; rows_('MAINTENANCE_VALUES').filter(v => v.task_id === tid).forEach(v => c[v.field_id] = v.value);
+  t.custom = c; return taskDeco_(t, cfg_());
+}
+function getTasks_(u, p) {
+  const cfg = cfg_(), vals = rows_('MAINTENANCE_VALUES'), fm = {};
+  vals.forEach(v => { (fm[v.task_id] = fm[v.task_id] || {})[v.field_id] = v.value; });
+  return rows_('MAINTENANCE_DATA').filter(t => t.shutdown_id === p.shutdown_id && (p.archived ? true : t.archived !== 'Y'))
+    .map(t => { t.custom = fm[t.task_id] || {}; return taskDeco_(t, cfg); });
+}
+function saveTask_(u, p) {
+  const t = p.task, ts = now_();
+  if (!t) throw new Error('Data task kosong.');
+  const cur = t.task_id ? rows_('MAINTENANCE_DATA').find(x => x.task_id === t.task_id) : null;
+  let tid;
+  if (!cur) {
+    if (!t.shutdown_id || !String(t.description || '').trim()) throw new Error('Work Description wajib diisi.');
+    if (!t.planned_start || !t.planned_finish) throw new Error('Planned Start & Finish wajib diisi.');
+    const pr = Math.min(100, Math.max(0, Number(t.progress) || 0));
+    if (dt_(t.planned_finish) < dt_(t.planned_start)) throw new Error('Planned Finish lebih awal dari Planned Start.');
+    tid = id_('TSK');
+    add_('MAINTENANCE_DATA', { task_id: tid, shutdown_id: t.shutdown_id, description: t.description, planned_start: t.planned_start, planned_finish: t.planned_finish,
+      planned_duration_h: ((dt_(t.planned_finish) - dt_(t.planned_start)) / 3600000).toFixed(2), actual_start: pr > 0 ? ts : '', actual_finish: pr >= 100 ? ts : '',
+      pic: t.pic || '', progress: pr, status: pr >= 100 ? 'Completed' : pr > 0 ? 'Ongoing' : 'Not Started', last_updated: ts, updated_by: u.username, remark: t.remark || '', archived: '' });
+    logM_(tid, u, 'TASK_CREATED', '', t.description, t.remark, ts);
+  } else {
+    tid = cur.task_id; const ch = {};
+    ['description','planned_start','planned_finish','pic','progress','remark'].forEach(k => { if (t[k] !== undefined && String(t[k]) !== String(cur[k])) ch[k] = String(t[k]); });
+    const old = Number(cur.progress) || 0; let nw = old;
+    if (ch.progress !== undefined) { nw = Number(ch.progress); if (isNaN(nw) || nw < 0 || nw > 100) throw new Error('Progress harus 0-100.'); ch.progress = nw; }
+    if (old === 0 && nw > 0 && !cur.actual_start) ch.actual_start = ts;     // Actual Start otomatis
+    if (nw >= 100 && old < 100) ch.actual_finish = ts;                      // Actual Finish otomatis
+    if (nw < 100 && old >= 100) ch.actual_finish = '';                      // dikosongkan, jejak tetap di log
+    if (ch.progress !== undefined) ch.status = nw >= 100 ? 'Completed' : nw > 0 ? 'Ongoing' : 'Not Started';
+    const ps = ch.planned_start || cur.planned_start, pf = ch.planned_finish || cur.planned_finish;
+    if (ch.planned_start || ch.planned_finish) {
+      if (dt_(pf) < dt_(ps)) throw new Error('Planned Finish lebih awal dari Planned Start.');
+      ch.planned_duration_h = ((dt_(pf) - dt_(ps)) / 3600000).toFixed(2);
+    }
+    Object.keys(ch).forEach(k => { if (['description','planned_start','planned_finish','pic','progress','remark','actual_start','actual_finish','planned_duration_h'].indexOf(k) >= 0) logM_(tid, u, k, cur[k], ch[k], t.remark, ts); });
+    if (t.remark !== undefined && ch.remark === undefined && ch.progress !== undefined && t.remark) logM_(tid, u, 'remark', '', t.remark, '', ts);
+    ch.last_updated = ts; ch.updated_by = u.username; set_('MAINTENANCE_DATA', cur._row, ch);
+  }
+  if (t.custom) { // nilai field dinamis dari template
+    const vals = rows_('MAINTENANCE_VALUES'), fields = rows_('TEMPLATE_FIELDS');
+    Object.keys(t.custom).forEach(fid => {
+      const nv = String(t.custom[fid]), ex = vals.find(v => v.task_id === tid && v.field_id === fid), fn = (fields.find(f => f.field_id === fid) || {}).field_name || fid;
+      if (ex) { if (ex.value !== nv) { set_('MAINTENANCE_VALUES', ex._row, { value: nv }); logM_(tid, u, fn, ex.value, nv, '', ts); } }
+      else if (nv) { add_('MAINTENANCE_VALUES', { task_id: tid, field_id: fid, value: nv }); logM_(tid, u, fn, '', nv, '', ts); }
+    });
+  }
+  return { task_id: tid, task: oneTask_(tid) };
+}
+function deleteTask_(u, p) { // hapus permanen; riwayat perubahan tetap tersimpan di MAINTENANCE_LOG
+  const t = rows_('MAINTENANCE_DATA').find(x => x.task_id === p.task_id); if (!t) throw new Error('Task tidak ditemukan.');
+  logM_(t.task_id, u, 'TASK_DELETED', String(t.description).slice(0, 120), '', 'Dihapus permanen', now_());
+  rewrite_('MAINTENANCE_DATA', rows_('MAINTENANCE_DATA').filter(x => x.task_id !== p.task_id));
+  if (rows_('MAINTENANCE_VALUES').some(v => v.task_id === p.task_id)) rewrite_('MAINTENANCE_VALUES', rows_('MAINTENANCE_VALUES').filter(v => v.task_id !== p.task_id));
+  return { deleted: p.task_id };
+}
+function deleteTasks_(u, p) { // hapus banyak task sekaligus (checklist)
+  const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); const ts = now_(); let n = 0;
+  rows_('MAINTENANCE_DATA').forEach(t => { if (ids[t.task_id]) { logM_(t.task_id, u, 'TASK_DELETED', String(t.description).slice(0, 120), '', 'Dihapus permanen', ts); n++; } });
+  if (!n) throw new Error('Task tidak ditemukan.');
+  rewrite_('MAINTENANCE_DATA', rows_('MAINTENANCE_DATA').filter(t => !ids[t.task_id]));
+  if (rows_('MAINTENANCE_VALUES').some(v => ids[v.task_id])) rewrite_('MAINTENANCE_VALUES', rows_('MAINTENANCE_VALUES').filter(v => !ids[v.task_id]));
+  return { deleted: n };
+}
+function deletePowers_(u, p) { // hapus banyak titik jadwal power sekaligus
+  const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); const ts = now_(), all = rows_('POWER_SCHEDULE'); let n = 0;
+  all.forEach(r => { if (ids[r.schedule_id] && r.shutdown_id === p.shutdown_id) { logP_(r.schedule_id, u, 'ROW_DELETED', r.schedule_datetime, '', ts); n++; } });
+  if (n) { rewrite_('POWER_SCHEDULE', all.filter(r => !(ids[r.schedule_id] && r.shutdown_id === p.shutdown_id))); recalc_(p.shutdown_id); }
+  return getPower_(u, { shutdown_id: p.shutdown_id });
+}
+function deleteActivities_(u, p) {
+  const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); const all = rows_('OPERATIONAL_ACTIVITIES');
+  if (all.some(a => ids[a.activity_id])) rewrite_('OPERATIONAL_ACTIVITIES', all.filter(a => !(ids[a.activity_id] && a.shutdown_id === p.shutdown_id)));
+  return getPower_(u, { shutdown_id: p.shutdown_id });
+}
+function deleteProjects_(u, p) { // hapus project beserta seluruh datanya (riwayat perubahan tetap di sheet log)
+  const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); if (!(p.ids || []).length) throw new Error('Pilih project dulu.');
+  const tset = {}; rows_('MAINTENANCE_DATA').forEach(t => { if (ids[t.shutdown_id]) tset[t.task_id] = 1; });
+  [['SHUTDOWN_MASTER', r => !ids[r.shutdown_id]], ['MAINTENANCE_DATA', r => !ids[r.shutdown_id]], ['MAINTENANCE_VALUES', r => !tset[r.task_id]],
+   ['POWER_SCHEDULE', r => !ids[r.shutdown_id]], ['POWER_INTERVALS', r => !ids[r.shutdown_id]], ['OPERATIONAL_ACTIVITIES', r => !ids[r.shutdown_id]], ['NOTIFICATION_LOG', r => !ids[r.shutdown_id]],
+   ['TEMPLATE_FIELDS', r => !(r.template_id.indexOf('LOCAL:') === 0 && ids[r.template_id.slice(6)])], ['SETTINGS', r => !(r.key.indexOf('OPNOTE_') === 0 && ids[r.key.slice(7)])]
+  ].forEach(x => { const all = rows_(x[0]), keep = all.filter(x[1]); if (keep.length !== all.length) rewrite_(x[0], keep); });
+  logP_('PROJECT', u, 'PROJECT_DELETED', '', (p.ids || []).join(','), now_());
+  return { deleted: (p.ids || []).length };
+}
+function archiveTask_(u, p) {
+  const t = rows_('MAINTENANCE_DATA').find(x => x.task_id === p.task_id); if (!t) throw new Error('Task tidak ditemukan.');
+  const ts = now_(); set_('MAINTENANCE_DATA', t._row, { archived: p.restore ? '' : 'Y', last_updated: ts, updated_by: u.username });
+  logM_(t.task_id, u, 'archived', t.archived, p.restore ? '' : 'Y', '', ts); return { task: oneTask_(t.task_id) };
+}
+
+/* ---------- Power ---------- */
+function logP_(sid, u, f, o, n, ts) {
+  LOGQ.POWER_CHANGE_LOG.push({ _sid: sidOfP_(sid), log_id: id_('PLG'), schedule_id: sid, updated_by: u.username, timestamp: ts, field_name: f, old_value: o, new_value: n, remark: '' });
+}
+function recalc_(sid) { // hitung ulang POWER_INTERVALS untuk 1 shutdown
+  const cfg = cfg_(), all = rows_('POWER_SCHEDULE').filter(r => r.shutdown_id === sid), out = [], old = {};
+  rows_('POWER_INTERVALS').filter(x => x.shutdown_id === sid).forEach(x => old[x.interval_id] = x); // nilai calcine manual dipertahankan
+  const rate = (pw, g) => (num_(pw) > 0 && num_(g) > 0) ? num_(pw) * 1000 / num_(g) : null;   // t/h = MW x 1000 / (kWh/t)
+  const pick = (a, b, f, g) => { const ra = rate(a[f], a[g]); if (cfg.CALCINE_METHOD !== 'AVERAGE') return ra; const rb = rate(b[f], b[g]); return (ra == null || rb == null) ? null : (ra + rb) / 2; };
+  PHASES.forEach(ph => {
+    const r = all.filter(x => x.phase === ph).sort((a, b) => a.schedule_datetime < b.schedule_datetime ? -1 : 1);
+    for (let i = 0; i < r.length - 1; i++) {
+      const a = r[i], b = r[i + 1], h = (dt_(b.schedule_datetime) - dt_(a.schedule_datetime)) / 3600000;
+      const ah = (a.actual_datetime && b.actual_datetime) ? (dt_(b.actual_datetime) - dt_(a.actual_datetime)) / 3600000 : h;
+      const pr = pick(a, b, 'planned_power', 'planned_ghe'), ar = pick(a, b, 'actual_power', 'actual_ghe');
+      const iid = 'INT-' + a.schedule_id + '-' + b.schedule_id, o = old[iid] || {}, pm = o.planned_calcine_mode === 'Manual', am = o.actual_calcine_mode === 'Manual';
+      out.push({ interval_id: iid, shutdown_id: sid, phase: ph, start_schedule_id: a.schedule_id, end_schedule_id: b.schedule_id,
+        start_datetime: a.schedule_datetime, end_datetime: b.schedule_datetime, duration_h: h.toFixed(2),
+        planned_calcine: pm ? o.planned_calcine : (pr == null ? '' : pr.toFixed(3)), actual_calcine: am ? o.actual_calcine : (ar == null ? '' : ar.toFixed(3)),   // disimpan sebagai laju t/h
+        calc_status: (pr == null && ar == null && !pm && !am) ? 'Power/GHE belum lengkap' : ((pm || am) ? 'Calculated (ada nilai manual)' : 'Calculated'), formula_version: cfg.FORMULA_VERSION || '',
+        planned_calcine_mode: pm ? 'Manual' : 'Auto', actual_calcine_mode: am ? 'Manual' : 'Auto' });
+    }
+  });
+  const cur = rows_('POWER_INTERVALS').filter(x => x.shutdown_id === sid), sig = a => JSON.stringify(a.map(i => SCHEMA.POWER_INTERVALS.map(k => String(i[k] == null ? '' : i[k]))));
+  if (sig(cur) !== sig(out)) rewrite_('POWER_INTERVALS', rows_('POWER_INTERVALS').filter(x => x.shutdown_id !== sid).concat(out)); // tulis hanya bila ada perubahan
+}
+function getPower_(u, p) {
+  const now = new Date();
+  const sched = rows_('POWER_SCHEDULE').filter(r => r.shutdown_id === p.shutdown_id).sort((a, b) => a.schedule_datetime < b.schedule_datetime ? -1 : 1);
+  const acts = rows_('OPERATIONAL_ACTIVITIES').filter(r => r.shutdown_id === p.shutdown_id).map(a => {
+    a.status_eff = (a.status === 'Planned' && dt_(a.planned_datetime) < now) ? 'Delayed' : a.status; return a; });
+  return { schedule: sched, intervals: rows_('POWER_INTERVALS').filter(r => r.shutdown_id === p.shutdown_id), activities: acts,
+    note: ((rows_('SETTINGS').find(x => x.key === 'OPNOTE_' + p.shutdown_id)) || {}).value || '' };   // catatan operasi per project
+}
+function generateSchedule_(u, p) { // titik planned otomatis per interval (default dari POWER_SETTINGS)
+  const step = Number(p.step_h || cfg_().INTERVAL_H || 1), s = dt_(p.start), e = dt_(p.end), sp = Number(p.start_power), ep = Number(p.end_power);
+  if (PHASES.indexOf(p.phase) < 0 || !s || !e || e <= s || !(step > 0) || isNaN(sp) || isNaN(ep)) throw new Error('Isi phase, waktu mulai/selesai, power awal/akhir, dan interval dengan benar.');
+  const n = Math.floor((e - s) / (step * 3600000)); if (n > 500) throw new Error('Terlalu banyak titik (maks 500).');
+  const ex = rows_('POWER_SCHEDULE').filter(r => r.shutdown_id === p.shutdown_id && r.phase === p.phase);
+  let seq = ex.reduce((m, r) => Math.max(m, Number(r.sequence) || 0), 0); const ts = now_();
+  for (let i = 0; i <= n; i++) {
+    const t = new Date(s.getTime() + i * step * 3600000), k = Utilities.formatDate(t, tz_(), 'yyyy-MM-dd HH:mm');
+    if (ex.some(r => r.schedule_datetime === k)) continue;
+    add_('POWER_SCHEDULE', { schedule_id: id_('PWR'), shutdown_id: p.shutdown_id, phase: p.phase, sequence: ++seq, schedule_datetime: k,
+      planned_power: (sp + (ep - sp) * (n ? i / n : 0)).toFixed(2), planned_power_mode: 'Auto', planned_ghe_mode: 'Manual', actual_ghe_mode: 'Manual', updated_by: u.username, updated_at: ts });
+  }
+  recalc_(p.shutdown_id); return getPower_(u, { shutdown_id: p.shutdown_id });
+}
+function savePower_(u, p) {
+  const r = p.row, ts = now_(), F = ['schedule_datetime','planned_power','planned_ghe','actual_datetime','actual_power','actual_ghe','remark'];
+  ['planned_power','planned_ghe','actual_power','actual_ghe'].forEach(k => { if (r[k] !== undefined && r[k] !== '' && (isNaN(Number(r[k])) || Number(r[k]) < 0)) throw new Error(k + ' harus angka >= 0.'); });
+  const cur = r.schedule_id ? rows_('POWER_SCHEDULE').find(x => x.schedule_id === r.schedule_id) : null;
+  if (!cur) {
+    if (PHASES.indexOf(r.phase) < 0 || !r.schedule_datetime) throw new Error('Phase dan waktu jadwal wajib diisi.');
+    const seq = rows_('POWER_SCHEDULE').filter(x => x.shutdown_id === r.shutdown_id && x.phase === r.phase).reduce((m, x) => Math.max(m, Number(x.sequence) || 0), 0) + 1, o = { schedule_id: id_('PWR'), shutdown_id: r.shutdown_id, phase: r.phase, sequence: seq,
+      planned_power_mode: 'Manual', planned_ghe_mode: 'Manual', actual_ghe_mode: 'Manual', updated_by: u.username, updated_at: ts };
+    F.forEach(k => o[k] = r[k] == null ? '' : r[k]); add_('POWER_SCHEDULE', o); logP_(o.schedule_id, u, 'ROW_CREATED', '', o.schedule_datetime, ts);
+  } else {
+    const ch = {}; F.forEach(k => { if (r[k] !== undefined && String(r[k]) !== String(cur[k])) { ch[k] = r[k]; logP_(cur.schedule_id, u, k, cur[k], r[k], ts); } });
+    if (ch.planned_power !== undefined) ch.planned_power_mode = 'Manual';
+    ch.updated_by = u.username; ch.updated_at = ts; set_('POWER_SCHEDULE', cur._row, ch);
+  }
+  const sid = r.shutdown_id || cur.shutdown_id; recalc_(sid); return getPower_(u, { shutdown_id: sid });
+}
+function fillGhe_(u, p) { // isi GHE ke banyak baris (hasil drag di frontend) - 1 kali tulis
+  if (['planned_ghe','actual_ghe'].indexOf(p.field) < 0 || isNaN(Number(p.value)) || Number(p.value) <= 0) throw new Error('Nilai GHE harus angka > 0.');
+  const ts = now_(), ids = p.ids || [], all = rows_('POWER_SCHEDULE').slice(); let sid = '', n = 0;
+  all.forEach(r => { if (ids.indexOf(r.schedule_id) < 0) return; sid = r.shutdown_id;
+    if (String(r[p.field]) !== String(p.value)) { logP_(r.schedule_id, u, p.field, r[p.field], p.value, ts); r[p.field] = String(p.value); r.updated_by = u.username; r.updated_at = ts; n++; } });
+  if (n) rewrite_('POWER_SCHEDULE', all);
+  if (sid) recalc_(sid); return getPower_(u, { shutdown_id: sid || p.shutdown_id });
+}
+function saveCalcine_(u, p) { // input calcine manual per interval (kosong = kembali otomatis Power/GHE)
+  const f = p.field === 'planned' ? 'planned' : 'actual', iv = rows_('POWER_INTERVALS').find(x => x.interval_id === p.interval_id);
+  if (!iv) throw new Error('Interval tidak ditemukan. Muat ulang halaman.');
+  const v = String(p.value == null ? '' : p.value).trim().replace(',', '.');
+  if (v !== '' && (isNaN(Number(v)) || Number(v) < 0)) throw new Error('Calcine harus angka >= 0.');
+  logP_(iv.interval_id, u, f + '_calcine', iv[f + '_calcine'], v === '' ? '(otomatis)' : v, now_());
+  const o = {}; o[f + '_calcine_mode'] = v === '' ? 'Auto' : 'Manual'; if (v !== '') o[f + '_calcine'] = Number(v).toFixed(3);
+  set_('POWER_INTERVALS', iv._row, o); recalc_(iv.shutdown_id); return getPower_(u, { shutdown_id: iv.shutdown_id });
+}
+function pasteCells_(u, p) { // banyak sel sekaligus (paste dari Excel, drag GHE, edit sel): 1 request, 1 kali tulis
+  const sid = p.shutdown_id, ts = now_(), cells = p.cells || [], cal = p.cal || [];
+  if (cells.length + cal.length > 5000) throw new Error('Terlalu banyak sel (maks 5000).');
+  const F = ['schedule_datetime','planned_power','planned_ghe','actual_datetime','actual_power','actual_ghe','remark'];
+  const all = rows_('POWER_SCHEDULE').slice(), byId = {}; all.forEach(r => byId[r.schedule_id] = r);
+  let n = 0, changed = 0;
+  cells.forEach(c => {
+    const r = byId[c.id]; if (!r || r.shutdown_id !== sid || F.indexOf(c.f) < 0) return;
+    const v = String(c.v == null ? '' : c.v).trim(), dtf = c.f.indexOf('datetime') >= 0;
+    if (c.f !== 'remark' && v !== '' && (dtf ? isNaN(dt_(v)) : (isNaN(Number(v)) || Number(v) < 0))) return;   // sel tidak valid dilewati
+    if (c.f === 'schedule_datetime' && v === '') return;
+    n++; if (String(r[c.f]) === v) return;
+    logP_(r.schedule_id, u, c.f, r[c.f], v, ts); r[c.f] = v; if (c.f === 'planned_power') r.planned_power_mode = 'Manual';
+    r.updated_by = u.username; r.updated_at = ts; changed++;
+  });
+  if (changed) rewrite_('POWER_SCHEDULE', all);
+  if (cal.length) {
+    const ivs = rows_('POWER_INTERVALS').slice(), bi = {}; ivs.forEach(i => bi[i.interval_id] = i); let cc = 0;
+    cal.forEach(c => { const i = bi[c.iv]; if (!i || i.shutdown_id !== sid) return;
+      const f = c.f === 'planned' ? 'planned' : 'actual', v = String(c.v == null ? '' : c.v).trim().replace(',', '.');
+      if (v !== '' && (isNaN(Number(v)) || Number(v) < 0)) return;
+      n++; i[f + '_calcine_mode'] = v === '' ? 'Auto' : 'Manual'; if (v !== '') i[f + '_calcine'] = Number(v).toFixed(3);
+      logP_(i.interval_id, u, f + '_calcine', '', v === '' ? '(otomatis)' : v, ts); cc++; });
+    if (cc) rewrite_('POWER_INTERVALS', ivs);
+  }
+  if (changed || cal.length) recalc_(sid);
+  const pw = getPower_(u, { shutdown_id: sid }); pw.pasted = n; return pw;
+}
+function deletePower_(u, p) { // hapus titik jadwal (tercatat di log)
+  const all = rows_('POWER_SCHEDULE'), r = all.find(x => x.schedule_id === p.schedule_id); if (!r) throw new Error('Baris tidak ditemukan.');
+  logP_(r.schedule_id, u, 'ROW_DELETED', r.schedule_datetime, '', now_());
+  rewrite_('POWER_SCHEDULE', all.filter(x => x.schedule_id !== p.schedule_id)); recalc_(r.shutdown_id); return getPower_(u, { shutdown_id: r.shutdown_id });
+}
+function saveActivity_(u, p) {
+  const a = p.row, ts = now_();
+  if (!String(a.activity_name || '').trim() || !a.shutdown_id) throw new Error('Nama aktivitas wajib diisi.');
+  if (!a.planned_datetime && !a.actual_datetime) throw new Error('Isi Planned atau Actual DateTime.');
+  if (a.actual_datetime && a.status === 'Planned') a.status = 'Completed';
+  const cur = a.activity_id ? rows_('OPERATIONAL_ACTIVITIES').find(x => x.activity_id === a.activity_id) : null;
+  const o = { shutdown_id: a.shutdown_id, phase: a.phase || 'Both', activity_name: a.activity_name, planned_datetime: a.planned_datetime || '', actual_datetime: a.actual_datetime || '', status: a.status || 'Planned', remark: a.remark || '', updated_by: u.username, updated_at: ts, planned_end: a.planned_end || '', actual_end: a.actual_end || '' };
+  if ((o.planned_end && o.planned_datetime && dt_(o.planned_end) < dt_(o.planned_datetime)) || (o.actual_end && o.actual_datetime && dt_(o.actual_end) < dt_(o.actual_datetime))) throw new Error('Waktu selesai lebih awal dari waktu mulai.');
+  if (cur) { set_('OPERATIONAL_ACTIVITIES', cur._row, o); logP_(cur.activity_id, u, 'ACTIVITY_UPDATED', cur.status, o.status, ts); }
+  else { o.activity_id = id_('ACT'); add_('OPERATIONAL_ACTIVITIES', o); logP_(o.activity_id, u, 'ACTIVITY_CREATED', '', o.activity_name, ts); }
+  return getPower_(u, { shutdown_id: a.shutdown_id });
+}
+
+/* ---------- Notifikasi (untuk semua pengguna yang membuka aplikasi) ---------- */
+function getNotifs_(u, p, tasks) {
+  const sid = p.shutdown_id, now = new Date(), list = [];
+  (tasks || getTasks_(u, { shutdown_id: sid })).forEach(t => {
+    if (t.archived === 'Y') return;
+    if (t.deadline === 'Overdue') list.push(['Overdue Maintenance', t.task_id, 'Terlambat: ' + t.description + ' (' + t.progress + '%)']);
+    else if (t.deadline === 'Approaching') list.push(['Approaching Deadline', t.task_id, 'Mendekati deadline: ' + t.description + ' (' + t.progress + '%)']);
+    if (t.delayed_start) list.push(['Delayed Start', t.task_id, 'Belum dimulai padahal jadwal sudah lewat: ' + t.description]);
+  });
+  rows_('OPERATIONAL_ACTIVITIES').filter(a => a.shutdown_id === sid && a.status === 'Planned' && dt_(a.planned_datetime) < now)
+    .forEach(a => list.push(['Operational Activity Delayed', a.activity_id, 'Aktivitas terlambat: ' + a.activity_name + ' (' + a.planned_datetime + ')']));
+  const log = rows_('NOTIFICATION_LOG').filter(l => l.shutdown_id === sid), res = [], fresh = [];
+  list.forEach(n => {
+    let l = log.find(x => x.category === n[0] && x.ref_id === n[1]);
+    if (!l) { l = { notif_id: id_('NTF'), shutdown_id: sid, category: n[0], ref_id: n[1], message: n[2], created_at: now_() }; fresh.push(l); log.push(l); }
+    res.push({ key: l.category + '|' + l.ref_id, category: l.category, message: n[2], created_at: l.created_at });
+  });
+  if (fresh.length) { const lock = LockService.getScriptLock(); lock.waitLock(10000); try { addMany_('NOTIFICATION_LOG', fresh); } finally { lock.releaseLock(); } }
+  return res;
+}
+
+/* ---------- Import dari Excel (data sudah diparse di browser) ---------- */
+function importTasks_(u, p) {
+  const sid = p.shutdown_id, rows = p.rows || [];
+  if (!sid || !rows.length) throw new Error('Tidak ada baris untuk diimpor.');
+  if (rows.length > 1500) throw new Error('Maksimal 1500 baris per impor.');
+  const proj = rows_('SHUTDOWN_MASTER').find(x => x.shutdown_id === sid); if (!proj) throw new Error('Project tidak ditemukan.');
+  const fmap = {};  // nama field (lowercase) -> field_id, dari template project + field khusus project
+  rows_('TEMPLATE_FIELDS').filter(f => f.active !== 'N' && (f.template_id === proj.template_id || f.template_id === 'LOCAL:' + sid)).forEach(f => fmap[f.field_name.toLowerCase()] = f.field_id);
+  const newF = [];
+  (p.fields || []).forEach((name, i) => { const k = String(name).toLowerCase();
+    if (!fmap[k]) { const f = { field_id: id_('FLD'), template_id: 'LOCAL:' + sid, field_name: name, field_type: 'text', options: '', sort: 100 + i, active: 'Y' }; fmap[k] = f.field_id; newF.push(f); } });
+  addMany_('TEMPLATE_FIELDS', newF);
+  const ts = now_(), all = rows_('MAINTENANCE_DATA').slice();
+  if (p.archive_old) all.forEach(t => { if (t.shutdown_id === sid) t.archived = 'Y'; });
+  const tasks = [], vals = [], logs = []; let skipped = 0;
+  rows.forEach(r => {
+    const d = String(r.description || '').trim(); if (!d) { skipped++; return; }
+    const pr = Math.min(100, Math.max(0, Number(r.progress) || 0)), ps = r.planned_start || '', pf = r.planned_finish || '', tid = id_('TSK');
+    tasks.push({ task_id: tid, shutdown_id: sid, description: d, planned_start: ps, planned_finish: pf,
+      planned_duration_h: (ps && pf) ? ((dt_(pf) - dt_(ps)) / 3600000).toFixed(2) : '', actual_start: pr > 0 ? ts : '', actual_finish: pr >= 100 ? ts : '',
+      pic: r.pic || '', progress: pr, status: pr >= 100 ? 'Completed' : pr > 0 ? 'Ongoing' : 'Not Started', last_updated: ts, updated_by: u.username, remark: r.remark || '', archived: '' });
+    Object.keys(r.custom || {}).forEach(k => { const fid = fmap[k.toLowerCase()], v = String(r.custom[k]).trim(); if (fid && v) vals.push({ task_id: tid, field_id: fid, value: v }); });
+    logs.push({ log_id: id_('MLG'), task_id: tid, updated_by: u.username, timestamp: ts, field_name: 'TASK_IMPORTED', old_value: '', new_value: d.slice(0, 120), remark: 'Import Excel' });
+  });
+  rewrite_('MAINTENANCE_DATA', all.concat(tasks)); addMany_('MAINTENANCE_VALUES', vals); addMany_('MAINTENANCE_LOG', logs);
+  return { count: tasks.length, skipped: skipped, shutdown_id: sid };
+}
+function importPower_(u, p) {
+  const sid = p.shutdown_id, rows = p.rows || [];
+  if (!sid || !rows.length) throw new Error('Tidak ada baris untuk diimpor.');
+  if (rows.length > 3000) throw new Error('Maksimal 3000 baris per impor.');
+  const ts = now_(), phases = {}; rows.forEach(r => phases[r.phase] = 1);
+  let ex = rows_('POWER_SCHEDULE').slice();
+  if (p.replace) ex = ex.filter(r => !(r.shutdown_id === sid && phases[r.phase]));
+  const idx = {}, seq = {}; ex.forEach(r => { if (r.shutdown_id === sid) { idx[r.phase + '|' + r.schedule_datetime] = r; seq[r.phase] = Math.max(seq[r.phase] || 0, Number(r.sequence) || 0); } });
+  const adds = [], logs = []; let upd = 0, bad = 0;
+  rows.forEach(r => {
+    if (PHASES.indexOf(r.phase) < 0 || !r.schedule_datetime) { bad++; return; }
+    const o = { planned_power: r.planned_power, planned_ghe: r.planned_ghe, actual_datetime: r.actual_datetime, actual_power: r.actual_power, actual_ghe: r.actual_ghe, remark: r.remark };
+    const cur = idx[r.phase + '|' + r.schedule_datetime];
+    if (cur) { Object.keys(o).forEach(k => { if (o[k] !== undefined && o[k] !== '') cur[k] = o[k]; }); cur.updated_by = u.username; cur.updated_at = ts; upd++; return; }
+    const n = { schedule_id: id_('PWR'), shutdown_id: sid, phase: r.phase, sequence: (seq[r.phase] = (seq[r.phase] || 0) + 1), schedule_datetime: r.schedule_datetime,
+      planned_power_mode: 'Manual', planned_ghe_mode: 'Manual', actual_ghe_mode: 'Manual', updated_by: u.username, updated_at: ts };
+    Object.keys(o).forEach(k => n[k] = o[k] == null ? '' : o[k]);
+    adds.push(n); idx[r.phase + '|' + r.schedule_datetime] = n;
+    logs.push({ log_id: id_('PLG'), schedule_id: n.schedule_id, updated_by: u.username, timestamp: ts, field_name: 'ROW_CREATED', old_value: '', new_value: r.schedule_datetime + ' (import)', remark: '' });
+  });
+  rewrite_('POWER_SCHEDULE', ex.concat(adds)); addMany_('POWER_CHANGE_LOG', logs); recalc_(sid);
+  const pw = getPower_(u, { shutdown_id: sid }); pw.imported = { added: adds.length, updated: upd, skipped: bad }; return pw;
+}
+
+/* ---------- Timeline ---------- */
+function getTimeline_(u, p) {
+  const tasks = {}, ev = [], sid = p.shutdown_id;
+  rows_('MAINTENANCE_DATA').filter(t => t.shutdown_id === sid).forEach(t => tasks[t.task_id] = t.description);
+  rows_('MAINTENANCE_LOG').filter(l => tasks[l.task_id]).forEach(l => ev.push({ time: l.timestamp, type: 'Maintenance', by: l.updated_by, text: tasks[l.task_id] + ' - ' + l.field_name + ': ' + (l.old_value || '-') + ' → ' + (l.new_value || '-') }));
+  const sch = {}; rows_('POWER_SCHEDULE').filter(r => r.shutdown_id === sid).forEach(r => sch[r.schedule_id] = r.phase + ' ' + r.schedule_datetime);
+  const acts = {}; rows_('OPERATIONAL_ACTIVITIES').filter(r => r.shutdown_id === sid).forEach(r => acts[r.activity_id] = r.activity_name);
+  rows_('POWER_INTERVALS').filter(i => i.shutdown_id === sid).forEach(i => sch[i.interval_id] = 'Calcine ' + i.phase + ' ' + i.start_datetime);
+  rows_('POWER_CHANGE_LOG').filter(l => sch[l.schedule_id] || acts[l.schedule_id]).forEach(l => ev.push({ time: l.timestamp, type: acts[l.schedule_id] ? 'Activity' : 'Power', by: l.updated_by, text: (sch[l.schedule_id] || acts[l.schedule_id]) + ' - ' + l.field_name + ': ' + (l.old_value || '-') + ' → ' + (l.new_value || '-') }));
+  return ev.sort((a, b) => a.time < b.time ? 1 : -1).slice(0, 150);
+}
+
+/* ---------- Admin, matriks izin, template ---------- */
+function permMatrix_() { const m = {}; Object.keys(FEATURES).forEach(k => m[k] = { label: FEATURES[k][0], mode: perm_(k) }); return m; }
+function tplList_() {
+  const flds = rows_('TEMPLATE_FIELDS').filter(f => f.active !== 'N');
+  return rows_('TEMPLATE_MASTER').filter(t => t.active !== 'N').map(t => { t.fields = flds.filter(f => f.template_id === t.template_id).sort((a, b) => a.sort - b.sort); return t; });
+}
+const ACTIONS = {
+  bootstrap: { f: () => ({ projects: rows_('SHUTDOWN_MASTER'), cfg: cfg_(), perms: permMatrix_(), templates: tplList_(),
+    localFields: rows_('TEMPLATE_FIELDS').filter(f => f.template_id.indexOf('LOCAL:') === 0 && f.active !== 'N'),
+    people: Object.keys(rows_('MAINTENANCE_DATA').reduce((m, t) => { if (t.pic) m[t.pic] = 1; return m; }, {})) }) },
+  checkPassword: { f: (u, p) => ({ valid: !!sheetPw_() && String(p.pw || '') === sheetPw_() }) },
+  getTasks: { f: getTasks_ }, getPower: { f: getPower_ }, getTimeline: { f: getTimeline_ },
+  getNotifs: { f: getNotifs_ },
+  rev: { f: () => ({ rev: PropertiesService.getScriptProperties().getProperty('REV') || '0' }) },   // murah: tidak membaca sheet
+  saveGrid: { w: 'grid_edit', f: (u, p) => saveTask_(u, { task: { task_id: p.task_id, planned_start: p.planned_start, planned_finish: p.planned_finish } }) },
+  snapshot: { f: (u, p) => {
+    const cfg = cfg_();
+    if (rows_('POWER_INTERVALS').some(i => i.shutdown_id === p.shutdown_id && i.formula_version !== cfg.FORMULA_VERSION)) { // interval lama dihitung ulang dengan rumus terbaru
+      const lock = LockService.getScriptLock(); lock.waitLock(20000); try { recalc_(p.shutdown_id); } finally { lock.releaseLock(); } }
+    const tasks = getTasks_(u, { shutdown_id: p.shutdown_id, archived: true }); return { tasks: tasks, power: getPower_(u, p), notifs: getNotifs_(u, p, tasks) }; } }, // 1 request untuk semua data
+  saveCalcine: { w: 'power_edit', f: saveCalcine_ }, pasteCells: { w: 'power_edit', f: pasteCells_ },
+  saveTz: { w: 'tz_edit', f: (u, p) => {
+    if (!TZ_MAP[p.tz]) throw new Error('Zona waktu harus WIB, WITA, atau WIT.');
+    const r = rows_('SETTINGS').find(x => x.key === 'TZ');
+    if (r) set_('SETTINGS', r._row, { value: p.tz }); else add_('SETTINGS', { key: 'TZ', value: p.tz, description: 'Zona waktu aplikasi' });
+    TZK = null; return { TZ: p.tz }; } },
+  importTasks: { w: 'task_edit', f: importTasks_ }, importPower: { w: 'power_edit', f: importPower_ },
+  saveTask: { w: 'task_edit', f: saveTask_ }, archiveTask: { w: 'task_edit', f: archiveTask_ },
+  updateProgress: { w: 'task_progress', f: (u, p) => saveTask_(u, { task: { task_id: p.task_id, progress: p.progress } }) },  // hanya field progress
+  deleteTask: { w: 'task_delete', f: deleteTask_ }, deleteTasks: { w: 'task_delete', f: deleteTasks_ },
+  deletePowers: { w: 'power_plan', f: deletePowers_ }, deleteActivities: { w: 'power_plan', f: deleteActivities_ },
+  deleteProjects: { w: 'project_delete', f: deleteProjects_ },
+  setProjectStatus: { w: 'project_edit', f: (u, p) => { if (['Active', 'Completed', 'Archived'].indexOf(p.status) < 0) throw new Error('Status tidak valid.');
+    const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); rows_('SHUTDOWN_MASTER').forEach(r => { if (ids[r.shutdown_id]) set_('SHUTDOWN_MASTER', r._row, { status: p.status }); }); return true; } },
+  saveOpNote: { w: 'power_edit', f: (u, p) => {   // catatan operasi (teks bebas) di samping grafik
+    const k = 'OPNOTE_' + p.shutdown_id, v = String(p.note || '').slice(0, 8000), r = rows_('SETTINGS').find(x => x.key === k);
+    if (r) set_('SETTINGS', r._row, { value: v }); else add_('SETTINGS', { key: k, value: v, description: 'Catatan operasi project' });
+    logP_('NOTE', u, 'op_note', '', v.slice(0, 100), now_()); return getPower_(u, { shutdown_id: p.shutdown_id }); } },
+  taskLog: { f: (u, p) => rows_('MAINTENANCE_LOG').filter(l => l.task_id === p.task_id).reverse() },
+  savePower: { w: 'power_edit', f: savePower_ }, fillGhe: { w: 'power_edit', f: fillGhe_ }, saveActivity: { w: 'power_edit', f: saveActivity_ },
+  generateSchedule: { w: 'power_plan', f: generateSchedule_ }, deletePower: { w: 'power_plan', f: deletePower_ },
+  saveProject: { w: 'project_edit', f: (u, p) => {
+    const j = p.project; if (!String(j.name || '').trim() || !j.template_id) throw new Error('Nama project dan template wajib diisi.');
+    const cur = j.shutdown_id ? rows_('SHUTDOWN_MASTER').find(x => x.shutdown_id === j.shutdown_id) : null;
+    const o = { name: j.name, template_id: j.template_id, start_date: j.start_date || '', end_date: j.end_date || '', status: j.status || 'Active' };
+    if (cur) set_('SHUTDOWN_MASTER', cur._row, o); else { o.shutdown_id = id_('SD'); o.created_by = u.username; o.created_at = now_(); add_('SHUTDOWN_MASTER', o); }
+    return { shutdown_id: cur ? cur.shutdown_id : o.shutdown_id }; } },
+  saveTemplate: { w: 'template_edit', f: (u, p) => {            // template baru
+    if (!String(p.name || '').trim()) throw new Error('Nama template wajib diisi.');
+    const tid = id_('TPL'); add_('TEMPLATE_MASTER', { template_id: tid, name: p.name, active: 'Y', created_at: now_() });
+    (p.fields || []).forEach((f, i) => add_('TEMPLATE_FIELDS', { field_id: id_('FLD'), template_id: tid, field_name: f.name, field_type: f.type || 'text', options: f.options || '', sort: i + 1, active: 'Y' }));
+    return { template_id: tid }; } },
+  updateTemplate: { w: 'template_edit', f: (u, p) => {           // edit template yang ada
+    const t = rows_('TEMPLATE_MASTER').find(x => x.template_id === p.template_id); if (!t) throw new Error('Template tidak ditemukan.');
+    if (!String(p.name || '').trim()) throw new Error('Nama template wajib diisi.');
+    set_('TEMPLATE_MASTER', t._row, { name: p.name });
+    const ex = rows_('TEMPLATE_FIELDS').filter(f => f.template_id === t.template_id);
+    (p.fields || []).forEach((f, i) => {
+      const cur = f.field_id && ex.find(x => x.field_id === f.field_id);
+      if (cur) set_('TEMPLATE_FIELDS', cur._row, { field_name: f.name, field_type: f.type || 'text', options: f.options || '', sort: i + 1, active: f.remove ? 'N' : 'Y' }); // 'N' = disembunyikan, nilai lama tetap tersimpan
+      else if (!f.remove && String(f.name || '').trim()) add_('TEMPLATE_FIELDS', { field_id: id_('FLD'), template_id: t.template_id, field_name: f.name, field_type: f.type || 'text', options: f.options || '', sort: i + 1, active: 'Y' });
+    });
+    return true; } },
+  savePerms: { w: 'matrix_edit', f: (u, p) => {
+    Object.keys(p.perms || {}).forEach(k => {
+      if (!FEATURES[k] || ['OPEN', 'PASSWORD'].indexOf(p.perms[k]) < 0) return;
+      const r = rows_('SETTINGS').find(x => x.key === 'PERM_' + k);
+      if (r) set_('SETTINGS', r._row, { value: p.perms[k] }); else add_('SETTINGS', { key: 'PERM_' + k, value: p.perms[k], description: FEATURES[k][0] });
+    });
+    return permMatrix_(); } },
+  saveSettings: { w: 'settings_edit', f: (u, p) => {
+    const ts = now_(), c = cfg_();
+    Object.keys(p.cfg || {}).forEach(k => {
+      const sheet = ['APPROACH_H'].indexOf(k) >= 0 ? 'SETTINGS' : 'POWER_SETTINGS', r = rows_(sheet).find(x => x.key === k);
+      if (r && r.value !== String(p.cfg[k])) { set_(sheet, r._row, { value: p.cfg[k] }); if (sheet === 'POWER_SETTINGS') logP_('SETTING', u, k, c[k], p.cfg[k], ts); }
+    });
+    rows_('SHUTDOWN_MASTER').forEach(s => recalc_(s.shutdown_id)); return true; } },
+  exportData: { f: (u, p) => {                                  // semua data 1 project, dipakai export Excel di frontend
+    const sid = p.shutdown_id, tasks = getTasks_(u, { shutdown_id: sid, archived: true }), tm = {};
+    tasks.forEach(t => tm[t.task_id] = 1);
+    const pw = getPower_(u, { shutdown_id: sid }), sm = {}; pw.schedule.forEach(r => sm[r.schedule_id] = 1); pw.activities.forEach(r => sm[r.activity_id] = 1);
+    return { tasks: tasks, log: rows_('MAINTENANCE_LOG').filter(l => tm[l.task_id]), schedule: pw.schedule, intervals: pw.intervals, activities: pw.activities,
+      powerlog: rows_('POWER_CHANGE_LOG').filter(l => sm[l.schedule_id]), fields: tplList_() }; } }
+};
+
+/* ======== Lapisan Firebase Realtime Database (pengganti sheet) ======== */
+/* >>> TEMPEL firebaseConfig Anda di sini (Firebase console > Project settings > Your apps > Config) <<< */
+const FB_CFG={apiKey:"AIzaSyCMINi4O0Z0IIgpSOPrnY_SPeVDAq4E4aM",authDomain:"gamesetz.firebaseapp.com",databaseURL:"https://gamesetz-default-rtdb.firebaseio.com",projectId:"gamesetz",storageBucket:"gamesetz.firebasestorage.app",messagingSenderId:"267615645977",appId:"1:267615645977:web:c5ed2d51c4bdcd29cf5588"};
+firebase.initializeApp(FB_CFG);
+const FDB=firebase.database(),FAU=firebase.auth();
+let UID='',DBC={},LOGC={},UNLOCKED=false,CUR_SID='',ready=null,Q=Promise.resolve();
+const PLOG=[],XTRA={},LOGT={MAINTENANCE_LOG:1,POWER_CHANGE_LOG:1},NL={taskLog:1,getTimeline:1,exportData:1};
+const san=s=>String(s).replace(/[.$#\[\]\/]/g,'_')||'_';
+const PK={MAINTENANCE_VALUES:o=>o.task_id+'~'+o.field_id,SETTINGS:o=>o.key,POWER_SETTINGS:o=>o.key,NOTIFICATION_LOG:o=>[o.shutdown_id,o.category,o.ref_id].join('~')};
+const pk=(n,o)=>san(PK[n]?PK[n](o):o[SCHEMA[n][0]]);
+const sha=async s=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('fsm|'+s)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+function perm_(f){return FEATURES[f]?FEATURES[f][1]:'OPEN';}
+function needPw_(w){if(w!=='matrix_edit'&&perm_(w)!=='PASSWORD')return;if(!UNLOCKED)throw new Error('PASSWORD_REQUIRED: fitur ini perlu password.');}
+function sidOf_(tid){const t=rows_('MAINTENANCE_DATA').find(x=>x.task_id===tid);return t?t.shutdown_id:CUR_SID;}
+function sidOfP_(id){const r=rows_('POWER_SCHEDULE').find(x=>x.schedule_id===id)||rows_('OPERATIONAL_ACTIVITIES').find(x=>x.activity_id===id);return r?r.shutdown_id:CUR_SID;}
+function rows_(n){if(MEMO[n])return MEMO[n];if(LOGT[n])return(MEMO[n]=(LOGC[n]||[]).slice());
+ const t=DBC[n]||{};return(MEMO[n]=Object.keys(t).map((k,i)=>{const o=norm_(n,t[k]);o._row=i+2;return o;}));}
+function addMany_(n,objs){if(LOGT[n]){objs.forEach(o=>PLOG.push([o._sid||CUR_SID||'_',n,o]));return;}
+ const m=rows_(n);objs.forEach(o=>{const x=norm_(n,o);x._row=m.length+2;m.push(x);});}
+function set_(n,row,o){const t=rows_(n).find(x=>x._row===row);if(!t)return;Object.keys(o).forEach(k=>{if(SCHEMA[n].indexOf(k)>=0)t[k]=String(o[k]);});}
+function rewrite_(n,objs){MEMO[n]=objs.map((o,i)=>{const x=norm_(n,o);x._row=i+2;return x;});}
+async function commit(){const up={};
+ Object.keys(MEMO).forEach(n=>{if(LOGT[n])return;const old=DBC[n]||{},nw={};
+  MEMO[n].forEach(r=>{const o={};SCHEMA[n].forEach(k=>o[k]=r[k]==null?'':String(r[k]));nw[pk(n,o)]=o;});
+  Object.keys(nw).forEach(k=>{const a=old[k];if(!a||SCHEMA[n].some(f=>String(a[f]==null?'':a[f])!==nw[k][f]))up['db/'+n+'/'+k]=nw[k];});
+  Object.keys(old).forEach(k=>{if(!(k in nw))up['db/'+n+'/'+k]=null;});});
+ PLOG.splice(0).forEach(([sid,n,o])=>{const x={n:n==='MAINTENANCE_LOG'?'M':'P'};Object.keys(o).forEach(k=>{if(k!=='_sid')x[k]=String(o[k]);});up['log/'+san(sid)+'/'+FDB.ref().push().key]=x;});
+ Object.assign(up,XTRA);if(Object.keys(up).length)await FDB.ref('fsm').update(up);}
+async function loadLogs(p){let sid=p.shutdown_id;if(!sid&&p.task_id){const t=rows_('MAINTENANCE_DATA').find(x=>x.task_id===p.task_id);sid=t&&t.shutdown_id;}
+ LOGC={MAINTENANCE_LOG:[],POWER_CHANGE_LOG:[]};if(!sid)return;const v=(await FDB.ref('fsm/log/'+san(sid)).once('value')).val()||{};
+ Object.keys(v).forEach(k=>{const x=v[k];(x.n==='M'?LOGC.MAINTENANCE_LOG:LOGC.POWER_CHANGE_LOG).push(x);});delete MEMO.MAINTENANCE_LOG;delete MEMO.POWER_CHANGE_LOG;}
+const mapErr=e=>/permission_denied/i.test((e&&(e.code||e.message))||'')?(UNLOCKED=false,new Error('PASSWORD_REQUIRED: Ditolak Firebase. Fitur ini perlu password (atau password sudah diganti).')):e;
+ACTIONS.seed={f:()=>{[['INTERVAL_H','1'],['CALCINE_METHOD','START'],['FORMULA_VERSION',FORMULA_LABEL],['GHE_UNIT','kWh/t'],['CALCINE_UNIT','t/h'],['POWER_UNIT','MW']].forEach(k=>ensure_('POWER_SETTINGS',k[0],k[1],''));
+ ensure_('SETTINGS','TZ','WITA','Zona waktu');ensure_('SETTINGS','APPROACH_H','24','Approaching: jam sebelum Planned Finish');
+ if(!rows_('TEMPLATE_MASTER').length){add_('TEMPLATE_MASTER',{template_id:'TPL-STD',name:'Standard Maintenance',active:'Y',created_at:now_()});
+  [['Work Group','list','Mekanik,Listrik,Refraktori,Instrumen'],['Area','text',''],['Equipment','text',''],['Priority','list','High,Medium,Low']].forEach((f,i)=>add_('TEMPLATE_FIELDS',{field_id:'FLD-STD'+(i+1),template_id:'TPL-STD',field_name:f[0],field_type:f[1],options:f[2],sort:i+1,active:'Y'}));}}};
+function fbInit(){return ready||(ready=(async()=>{
+ try{UID=(await FAU.signInAnonymously()).user.uid;}catch(e){throw new Error('Login anonim Firebase gagal ('+(e.code||e.message)+'). Aktifkan Authentication > Sign-in method > Anonymous, dan tambahkan domain GitHub Pages di Authorized domains.');}
+ await new Promise((res,rej)=>{let first=1;FDB.ref('fsm/db').on('value',s=>{DBC=s.val()||{};if(first){first=0;res();}else if(window.onRemote)window.onRemote();},e=>{if(first){first=0;rej(new Error('Tidak bisa membaca database ('+e.code+'). Periksa Rules.'));}});});
+ if(!DBC.SETTINGS){try{await run1('seed',{});}catch(e){}}
+})().catch(e=>{ready=null;throw e;}));}
+async function run1(action,p){
+ Object.keys(MEMO).forEach(k=>delete MEMO[k]);PLOG.length=0;Object.keys(XTRA).forEach(k=>delete XTRA[k]);TZK=null;LOGC={};
+ if(action==='checkPassword'){try{await FDB.ref('fsm/sessions/'+UID).set({hash:await sha(p.pw||'')});UNLOCKED=true;return{valid:true};}catch(e){UNLOCKED=false;return{valid:false};}}
+ if(action==='setPassword'){if(String(p.pw||'').length<6)throw new Error('Password minimal 6 karakter.');const h=await sha(p.pw);
+  try{await FDB.ref('fsm/keys/'+h).set(true);}catch(e){throw new Error('Password sudah pernah dibuat. Gunakan "Ganti password".');}
+  await FDB.ref('fsm/sessions/'+UID).set({hash:h});UNLOCKED=true;return true;}
+ if(action==='changePassword'){if(!UNLOCKED)throw new Error('PASSWORD_REQUIRED: masukkan password lama dulu.');if(String(p.newpw||'').length<6)throw new Error('Password baru minimal 6 karakter.');
+  const ho=(await FDB.ref('fsm/sessions/'+UID+'/hash').once('value')).val(),hn=await sha(p.newpw);if(ho===hn)throw new Error('Password baru sama dengan yang lama.');
+  try{await FDB.ref('fsm/keys/'+hn).set(true);await FDB.ref('fsm/sessions/'+UID).set({hash:hn});if(ho)await FDB.ref('fsm/keys/'+ho).remove();}catch(e){throw mapErr(e);}
+  S.pw=p.newpw;return true;}
+ const a=ACTIONS[action];if(!a)throw new Error('Aksi tidak dikenal: '+action);
+ CUR_SID=p.shutdown_id||(p.row&&p.row.shutdown_id)||'';const u={username:String(p.by||'Anonim').slice(0,40)};
+ if(a.w&&a.w!=='any')needPw_(a.w);
+ if(NL[action])await loadLogs(p);
+ const data=a.f(u,p);flushLogs_();
+ if(action==='deleteProjects')(p.ids||[]).forEach(i=>XTRA['log/'+san(i)]=null);
+ try{await commit();}catch(e){if(a.w)throw mapErr(e);}
+ if(action==='bootstrap'&&data.projects)data.projects.sort((x,y)=>String(y.created_at).localeCompare(String(x.created_at)));
+ return data;}
+window.callFB=(a,p)=>{const r=Q.then(async()=>{await fbInit();return run1(a,p||{});});Q=r.catch(()=>{});return r;};
+
+})();
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const pn=n=>{n=String(n==null?'':n);const m=n.match(/^[A-Z][a-z]{2} ([A-Z][a-z]{2}) (\d{1,2}) (\d{4}) \d\d:\d\d:\d\d GMT/);return m?m[2]+' '+m[1]+' '+m[3]:n;}; // nama project yang terlanjur jadi teks tanggal panjang
@@ -117,7 +668,7 @@ applyTheme(lsGet('fsm_theme')||(window.matchMedia&&matchMedia('(prefers-color-sc
 
 /* ---- komunikasi ke Code.gs (web app Apps Script, via fetch) ---- */
 const API_URL='https://script.google.com/macros/s/AKfycbyV8SpG9Yhfldcdo942mivIvSWzAQBEbdoKF4V5zt8XPZQlDdRY4Trk9WwKEToldSHy/exec';
-const AF={deleteTasks:'task_delete',deletePowers:'power_plan',deleteActivities:'power_plan',deleteProjects:'project_delete',setProjectStatus:'project_edit',saveOpNote:'power_edit',updateProgress:'task_progress',deleteTask:'task_delete',pasteCells:'power_edit',saveCalcine:'power_edit',saveTz:'tz_edit',saveTask:'task_edit',archiveTask:'task_edit',importTasks:'task_edit',savePower:'power_edit',fillGhe:'power_edit',saveActivity:'power_edit',importPower:'power_edit',generateSchedule:'power_plan',deletePower:'power_plan',saveProject:'project_edit',saveTemplate:'template_edit',updateTemplate:'template_edit',saveSettings:'settings_edit',savePerms:'matrix_edit'};
+const AF={saveGrid:'grid_edit',deleteTasks:'task_delete',deletePowers:'power_plan',deleteActivities:'power_plan',deleteProjects:'project_delete',setProjectStatus:'project_edit',saveOpNote:'power_edit',updateProgress:'task_progress',deleteTask:'task_delete',pasteCells:'power_edit',saveCalcine:'power_edit',saveTz:'tz_edit',saveTask:'task_edit',archiveTask:'task_edit',importTasks:'task_edit',savePower:'power_edit',fillGhe:'power_edit',saveActivity:'power_edit',importPower:'power_edit',generateSchedule:'power_plan',deletePower:'power_plan',saveProject:'project_edit',saveTemplate:'template_edit',updateTemplate:'template_edit',saveSettings:'settings_edit',savePerms:'matrix_edit'};
 const locked=f=>f==='matrix_edit'||(S.perms[f]&&S.perms[f].mode==='PASSWORD');
 async function ensurePw(f){if(locked(f)&&!S.pw&&!(await askPw()))throw new Error('Dibatalkan');}
 let busy=0;
@@ -125,14 +676,12 @@ let SEQ=0;
 function absorb(r,latest){if(!r||typeof r!=='object')return; // hasil server langsung dipakai, tanpa fetch ulang
  if(r.task){const i=S.tasks.findIndex(x=>x.task_id===r.task.task_id);if(i>=0)S.tasks[i]=r.task;else S.tasks.push(r.task);}
  if(latest&&r.schedule&&r.intervals&&r.activities)S.power=r;}
-async function call(a,p){
+async function call(a,p,q){
  if(AF[a])await ensurePw(AF[a]);
- busy++;$('ld').className='on';const my=++SEQ;
- try{const body=JSON.stringify(Object.assign({action:a,by:S.by,pw:S.pw,reqId:Math.random().toString(36).slice(2)+Date.now()},p||{}));
-  const r=await fetch(API_URL,{method:'POST',body}); // tanpa header khusus agar tidak kena preflight CORS
-  const j=await r.json();if(!j.ok)throw new Error(j.error);absorb(j.data,my===SEQ);return j.data;}
+ busy++;if(!q)$('ld').className='on';const my=++SEQ;
+ try{const d=await callFB(a,Object.assign({by:S.by,pw:S.pw},p||{}));absorb(d,my===SEQ);return d;}
  finally{if(!--busy){$('ld').style.width='100%';setTimeout(()=>{$('ld').className='';$('ld').style.width='';},250);}}}
-function askPw(){return new Promise(res=>{modal('Password diperlukan',inp('pw_i','Password (sheet PASWORD sel A1)','','password'),async()=>{
+function askPw(){return new Promise(res=>{modal('Password diperlukan',inp('pw_i','Password edit','','password'),async()=>{
   const v=gv('pw_i'),r=await call('checkPassword',{pw:v});if(!r.valid)throw new Error('Password salah.');S.pw=v;setTimeout(()=>res(true),80);},'Buka');
   $('mx').onclick=()=>{closeM();res(false);};});}
 function askName(){return new Promise(res=>{modal('Siapa Anda?','<div class="mute" style="margin-bottom:8px">Nama dicatat di riwayat perubahan sebagai "Updated By".</div>'+inp('nm_i','Nama',S.by||''),async()=>{
@@ -167,10 +716,10 @@ async function boot(){
  $('proj').onchange=()=>{S.sid=gv('proj');refresh();};
  $('tz').value=S.cfg.TZ||'WITA';$('tz').onchange=()=>run(async()=>{const v=gv('tz');try{await call('saveTz',{tz:v});S.cfg.TZ=v;toast('Zona waktu: '+v);await refresh();}catch(e){$('tz').value=S.cfg.TZ||'WITA';throw e;}});
  fillProj();show('ov');
- initPw();setInterval(()=>S.sid&&!busy&&!document.hidden&&pollNotifs(),180000);
+ initPw();liveSync();setInterval(()=>S.sid&&!busy&&!document.hidden&&pollNotifs(),180000);
 }
-function fillProj(){const sel=$('proj');sel.innerHTML=S.projects.map(p=>'<option value="'+p.shutdown_id+'">'+esc(pn(p.name))+(p.status!=='Active'?' ('+p.status+')':'')+'</option>').join('')||'<option value="">(belum ada project)</option>';
- if(!S.sid||!S.projects.find(p=>p.shutdown_id===S.sid))S.sid=S.projects.length?S.projects[0].shutdown_id:'';sel.value=S.sid;refresh();}
+function fillProj(){lastSig=psig(S.projects);const sel=$('proj');sel.innerHTML=S.projects.map(p=>'<option value="'+p.shutdown_id+'">'+esc(pn(p.name))+(p.status!=='Active'?' ('+p.status+')':'')+'</option>').join('')||'<option value="">(belum ada project)</option>';
+ if(!S.sid||!S.projects.find(p=>p.shutdown_id===S.sid))S.sid=latestProj();sel.value=S.sid;refresh();}
 const R={ov:()=>renderOv(),mt:()=>renderMt(),pw:()=>renderPw(),an:()=>renderAn(),nt:()=>renderNt(),ad:()=>renderAd()};
 function show(t){S.tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));
  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
@@ -259,6 +808,7 @@ function drawMt(){
   '<td style="white-space:nowrap"><button class="ib" data-a="h" data-id="'+t.task_id+'" title="Riwayat">🕘</button> <button class="ib" data-a="e" data-id="'+t.task_id+'" title="Edit">✎</button> <button class="ib" data-a="r" data-id="'+t.task_id+'" title="'+(t.archived==='Y'?'Pulihkan':'Arsipkan')+'">'+(t.archived==='Y'?'↩':'▣')+'</button> <button class="ib bad" data-a="d" data-id="'+t.task_id+'" title="Hapus">🗑</button></td></tr>';}).join('')||'<tr><td colspan="8">'+empty('Tidak ada task. Klik "+ Task" atau "Import Excel".')+'</td></tr>')+'</table>';
  updSel();}
 function gridDrag(e){const hb=e.target.closest&&e.target.closest('.hb');if(!hb)return;e.preventDefault();
+ if(locked('grid_edit')&&!S.pw){ensurePw('grid_edit').catch(()=>{});return;} // minta password dulu sebelum menyeret
  const tr=hb.closest('tr'),id=tr.dataset.id,boxes=[...tr.querySelectorAll('.hb')],a=boxes.indexOf(hb);let b=a;
  const mark=()=>boxes.forEach((x,i)=>x.classList.toggle('pre',i>=Math.min(a,b)&&i<=Math.max(a,b)));mark();
  const mv=ev=>{const el=document.elementFromPoint(ev.clientX,ev.clientY),x=el&&el.closest&&el.closest('.hb');if(x&&boxes.includes(x)){b=boxes.indexOf(x);mark();}};
@@ -266,9 +816,9 @@ function gridDrag(e){const hb=e.target.closest&&e.target.closest('.hb');if(!hb)r
  document.addEventListener('pointermove',mv);document.addEventListener('pointerup',up);}
 async function gridSet(id,h1,h2){ // seret kotak jam -> Planned Start/Finish
  const t=S.tasks.find(x=>x.task_id===id);if(!t)return;const day=S.g.day,ps=day+' '+z(h1)+':00',fin=h2+1>=24?fmtD(new Date(+D(day+' 00:00')+864e5))+' 00:00':day+' '+z(h2+1)+':00';
- try{await ensurePw('task_edit');}catch(e){drawMt();return;}
+ try{await ensurePw('grid_edit');}catch(e){drawMt();return;}
  const bak=JSON.stringify(t);t.planned_start=ps;t.planned_finish=fin;drawMt();
- call('saveTask',{task:{task_id:id,planned_start:ps,planned_finish:fin}}).then(()=>{rerender();toast('Jadwal '+ps.slice(11)+' – '+fin.slice(11));}).catch(e=>{Object.assign(t,JSON.parse(bak));drawMt();run(()=>{throw e;});});}
+ call('saveGrid',{task_id:id,planned_start:ps,planned_finish:fin}).then(()=>{rerender();toast('Jadwal '+ps.slice(11)+' – '+fin.slice(11));}).catch(e=>{Object.assign(t,JSON.parse(bak));drawMt();run(()=>{throw e;});});}
 function quick(id,v){ // optimistik: tampilan langsung berubah, server menyusul
  const t=S.tasks.find(x=>x.task_id===id);if(!t)return;const bak=JSON.stringify(t);v=Math.min(100,Math.max(0,Number(v)||0));
  t.progress=String(v);t.status=v>=100?'Completed':v>0?'Ongoing':'Not Started';if(v>=100)t.deadline='Completed';rerender();
@@ -320,7 +870,7 @@ function pwEdit(cells,cal,full){ // edit satu/banyak sel: layar berubah seketika
  recalcLocal();if(full)rerender();else{updPw();redrawCharts();S.dirty.ov=1;S.dirty.an=1;}
  call('pasteCells',{shutdown_id:S.sid,cells,cal}).then(res=>{if(res.pasted<exp){rerender();toast((exp-res.pasted)+' sel tidak valid diabaikan',1);}else if(exp>1)toast(exp+' sel tersimpan');})
   .catch(e=>{S.power=JSON.parse(bak);rerender();run(()=>{throw e;});});}
-function updPw(){ // perbarui nilai, delta, calcine & total tanpa mengganti tabel (fokus input tidak hilang)
+function updPw(){drawCalc(); // perbarui nilai, delta, calcine & total tanpa mengganti tabel (fokus input tidak hilang)
  const root=$('s-pw'),im={},sc={},act=document.activeElement;S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);S.power.schedule.forEach(r=>sc[r.schedule_id]=r);
  root.querySelectorAll('tr[data-id]').forEach(tr=>{const r=sc[tr.dataset.id];if(!r)return;const iv=im[r.schedule_id];
   tr.querySelectorAll('input[data-f]').forEach(el=>{if(el===act)return;const v=r[el.dataset.f],nv=el.type==='datetime-local'?toI(v):(v==null?'':v);if(el.value!==String(nv))el.value=nv;});
@@ -338,7 +888,7 @@ function pwRow(r,iv){
  '<td class="dev dP"></td><td class="dev dG"></td><td class="dev dC"></td><td><input type="text" data-f="remark" data-c="8" value="'+esc(r.remark)+'" placeholder="keterangan titik" style="min-width:170px"></td></tr>';}
 function renderPw(){
  const sc=S.power.schedule,im={};S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);
- let h=chartCard()+'<div class="card"><div class="tb"><h2 style="margin:0;flex:1">Jadwal power &amp; GHE</h2><button class="b" id="pgen">Generate planned power</button><button class="b alt" id="pimp">⬆ Import Excel</button><button class="b alt" id="padd">+ Titik manual</button></div>'+
+ let h=chartCard()+calcCard()+'<div class="card"><div class="tb"><h2 style="margin:0;flex:1">Jadwal power &amp; GHE</h2><button class="b" id="pgen">Generate planned power</button><button class="b alt" id="pimp">⬆ Import Excel</button><button class="b alt" id="padd">+ Titik manual</button></div>'+
  '<div class="help">Satuan: <b>Power = MW</b> · <b>GHE = kWh/t</b> · <b>Calcine = t/h</b> (= Power × 1000 ÷ GHE), total per fase dalam <b>ton</b>. <details><summary>Petunjuk pengisian</summary><ul style="margin:6px 0 0 18px;padding:0"><li>Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik); klik titik atau aktivitas di grafik untuk mengubah keterangannya.</li><li>Tempel dari Excel: salin kolom/blok di Excel, klik sel tujuan di tabel, Ctrl+V. Terisi ke bawah (dan ke kanan bila beberapa kolom).</li><li>GHE: seret kotak kecil di samping sel GHE ke bawah untuk mengisi nilai yang sama.</li><li>Calcine otomatis; ketik angka untuk input manual (kotak kuning), kosongkan untuk kembali otomatis. Rumus aktif: '+esc(S.cfg.FORMULA_VERSION||'')+'</li><li>Centang beberapa baris lalu <b>Hapus terpilih</b> untuk menghapus sekaligus.</li></ul></details></div>';
  PHASES2.forEach(([ph,cl])=>{const Rw=sc.filter(r=>r.phase===ph);
   h+='<div class="tb" style="margin-top:14px"><h3 style="margin:0;flex:1">'+ph+'</h3><span class="mute selcnt" data-ph="'+ph+'"></span><button class="b alt sm bulkp" data-ph="'+ph+'" disabled style="color:var(--bad)">🗑 Hapus terpilih</button></div><div class="tw"><table class="'+cl+'" data-ph="'+ph+'">'+
@@ -347,7 +897,7 @@ function renderPw(){
  const dur=(a,b)=>a&&b&&isFinite(+D(a))&&isFinite(+D(b))?f2((+D(b)-+D(a))/36e5)+' jam':'';
  h+='</div><div class="card"><div class="tb"><h2 style="margin:0;flex:1">Aktivitas operasional</h2><span class="mute selcnt" data-ph="act"></span><button class="b alt sm bulkp" data-ph="act" disabled style="color:var(--bad)">🗑 Hapus terpilih</button><button class="b" id="aadd">+ Aktivitas</button></div><div class="tw"><table data-ph="act"><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Fase</th><th>Aktivitas</th><th>Planned (mulai → selesai)</th><th>Actual (mulai → selesai)</th><th>Durasi</th><th>Status</th><th>Keterangan</th><th></th></tr>'+
  (S.power.activities.map(a=>'<tr data-id="'+a.activity_id+'"><td class="ck"><input type="checkbox" class="rk"></td><td>'+esc(a.phase)+'</td><td>'+esc(a.activity_name)+'</td><td>'+esc(a.planned_datetime)+(a.planned_end?' → '+esc(a.planned_end):'')+'</td><td>'+esc(a.actual_datetime)+(a.actual_end?' → '+esc(a.actual_end):'')+'</td><td>'+(dur(a.planned_datetime,a.planned_end)||dur(a.actual_datetime,a.actual_end))+'</td><td>'+bdg(a.status_eff)+'</td><td>'+esc(a.remark)+'</td><td><button class="ib" data-act="'+a.activity_id+'" title="Edit">✎</button></td></tr>').join('')||'<tr><td colspan="9">'+empty('Belum ada aktivitas. Klik grafik atau "+ Aktivitas".')+'</td></tr>')+'</table></div></div>';
- const el=$('s-pw');el.innerHTML=h;updPw();
+ const el=$('s-pw');el.innerHTML=h;updPw();bindCalc();
  $('pgen').onclick=genDlg;$('padd').onclick=()=>addDlg();$('aadd').onclick=()=>actDlg();$('pimp').onclick=()=>openImport('power');
  el.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>actDlg(S.power.activities.find(a=>a.activity_id===b.dataset.act)));
  el.querySelectorAll('.hd').forEach(x=>x.onpointerdown=e=>dragGhe(e,x));}
@@ -471,6 +1021,36 @@ function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const 
   const dist=ph=>{const t=S.power.schedule.filter(x=>x.phase===ph).map(x=>+D(x.schedule_datetime)).filter(isFinite);if(!t.length)return 1e18;const a=Math.min(...t),c=Math.max(...t);return ms<a?a-ms:ms>c?ms-c:0;};
   addDlg({fromChart:1,dt,power:pw,phase:dist('Ramp Down')<=dist('Ramp Up')?'Ramp Down':'Ramp Up'});};}
 
+
+/* ---- Kalkulator Calcine: kebutuhan calcine (ton) untuk rentang waktu terpilih ---- */
+const fdt=ms=>{const d=new Date(ms);return fmtD(d)+'T'+z(d.getHours())+':'+z(d.getMinutes());};
+const fshort=ms=>{const d=new Date(ms);return z(d.getDate())+'/'+z(d.getMonth()+1)+' '+z(d.getHours())+':'+z(d.getMinutes());};
+function calcRange(f,t){const a=+D(f),b=+D(t);if(!isFinite(a)||!isFinite(b)||b<=a)return null;let P=0,A=0,cov=0,miss=0;const rows=[];
+ S.power.intervals.slice().sort((x,y)=>x.start_datetime<y.start_datetime?-1:1).forEach(i=>{const s=+D(i.start_datetime),e=+D(i.end_datetime),o=Math.min(e,b)-Math.max(s,a);if(!(o>0))return;
+  const h=o/36e5,p=N(i.planned_calcine),c=N(i.actual_calcine);cov+=h;if(isNaN(p))miss++;else P+=p*h;if(!isNaN(c))A+=c*h;rows.push({ph:i.phase,s:Math.max(s,a),e:Math.min(e,b),h,p,c});});
+ return{P,A,cov,miss,tot:(b-a)/36e5,rows};}
+function calcCard(){const g=S.cc=S.cc||{};
+ if(!g.f){const t=S.power.schedule.map(r=>r.schedule_datetime).filter(x=>x&&isFinite(+D(x))).sort()[0],ms=t?+D(t):Date.now();g.f=fdt(ms);g.t=fdt(ms+288e5);}
+ return '<div class="card"><h2>Kalkulator Calcine</h2><div class="help">Pilih rentang waktu: dihitung kebutuhan calcine (t/h × jam) dari jadwal power &amp; GHE yang ada.</div><div class="tb fgrp"><label>Dari <input type="datetime-local" id="cc_f" value="'+g.f+'"></label><label>Sampai <input type="datetime-local" id="cc_t" value="'+g.t+'"></label></div><div id="cc_r"></div></div>';}
+function drawCalc(){const e=$('cc_r');if(!e||!S.cc)return;const r=calcRange(S.cc.f,S.cc.t);
+ if(!r){e.innerHTML='<div class="mute">Isi rentang waktu dengan benar (Sampai harus setelah Dari).</div>';return;}
+ e.innerHTML='<div class="ph2"><div class="phc" style="--c:var(--rd)"><span class="mute">Kebutuhan calcine PLAN</span><div><b>'+f2(r.P)+'</b> ton</div></div><div class="phc" style="--c:var(--ru)"><span class="mute">ACTUAL</span><div><b>'+f2(r.A)+'</b> ton</div></div><div class="phc" style="--c:var(--ok)"><span class="mute">Rata-rata plan · durasi</span><div><b>'+f2(r.cov?r.P/r.cov:NaN)+'</b> t/h · '+f2(r.tot)+' jam</div></div></div>'+
+ (r.cov<r.tot-0.01?'<div class="help" style="margin-top:8px">⚠ Hanya '+f2(r.cov)+' dari '+f2(r.tot)+' jam yang tercakup titik jadwal power.</div>':'')+(r.miss?'<div class="help">⚠ '+r.miss+' interval belum punya Power/GHE, tidak ikut dihitung.</div>':'')+
+ '<div class="tw" style="margin-top:8px"><table><tr><th>Fase</th><th>Waktu</th><th>Durasi</th><th>Plan (t/h)</th><th>Plan (ton)</th><th>Actual (t/h)</th><th>Actual (ton)</th></tr>'+
+ (r.rows.map(x=>'<tr><td>'+esc(x.ph)+'</td><td>'+fshort(x.s)+' → '+fshort(x.e)+'</td><td>'+f2(x.h)+' j</td><td>'+f2(x.p)+'</td><td>'+f2(x.p*x.h)+'</td><td>'+f2(x.c)+'</td><td>'+f2(x.c*x.h)+'</td></tr>').join('')||'<tr><td colspan="7">'+empty('Tidak ada interval jadwal pada rentang ini.')+'</td></tr>')+'</table></div>';}
+function bindCalc(){['cc_f','cc_t'].forEach(id=>{const x=$(id);if(x)x.onchange=()=>{S.cc[id==='cc_f'?'f':'t']=x.value;drawCalc();};});drawCalc();}
+
+/* ---- Real time: Firebase memberi tahu tiap ada perubahan; tampilan disegarkan bila Anda tidak sedang mengedit ---- */
+let pendingSync=0,lastSig='';
+const editing=()=>{const a=document.activeElement;return $('ov').style.display==='flex'||(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.matches('#mq,.rk,.ckall,.rkall,input[type=range]'))||!!document.querySelector('.hb.pre,tr.sel');};
+function onRemote(){pendingSync=1;}
+const psig=P=>JSON.stringify(P.map(p=>[p.shutdown_id,p.name,p.status]));
+async function doSync(){try{const b=await call('bootstrap',{},1),sg=psig(b.projects);Object.assign(S,b);
+ if(sg!==lastSig){fillProj();return;}
+ if(!S.sid)return;const d=await call('snapshot',{shutdown_id:S.sid},1);S.tasks=d.tasks;S.power=d.power;S.notifs=d.notifs;rerender();}catch(e){}}
+function liveSync(){setInterval(()=>{if(pendingSync&&!busy&&!document.hidden&&!editing()){pendingSync=0;doSync();}},1500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pendingSync=1;});}
+function latestProj(){const by=(a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')),act=S.projects.filter(p=>p.status==='Active').sort(by),all=S.projects.slice().sort(by);return (act[0]||all[0]||{}).shutdown_id||'';}
+
 /* ---- Timeline, Analytics, Notifikasi ---- */
 async function loadTl(){await run(async()=>{const E=await call('getTimeline',{shutdown_id:S.sid});
  $('s-tl').innerHTML='<div class="card"><h2>Timeline aktivitas &amp; perubahan</h2>'+(E.map(e=>'<div class="n-item"><span class="mute">'+esc(e.time)+' · '+esc(e.by)+'</span> <span class="badge '+(e.type==='Maintenance'?'Ongoing':e.type==='Power'?'Planned':'OnSchedule')+'">'+esc(e.type)+'</span> '+esc(e.text)+'</div>').join('')||empty('Belum ada aktivitas tercatat.'))+'</div>';});}
@@ -495,9 +1075,7 @@ function renderAd(){
  S.projects.map(p=>'<tr data-id="'+p.shutdown_id+'"><td class="ck"><input type="checkbox" class="rk"></td><td>'+esc(pn(p.name))+'</td><td>'+esc((S.templates.find(t=>t.template_id===p.template_id)||{}).name||'(kustom)')+'</td><td>'+esc(p.start_date)+' – '+esc(p.end_date)+'</td><td>'+esc(p.status)+'</td><td><button class="ib" data-pj="'+p.shutdown_id+'" title="Edit">✎</button></td></tr>').join('')+'</table></div></div>'+
  '<div class="card"><div class="tb"><h2 style="margin:0;flex:1">Template maintenance</h2><button class="b" id="tp">+ Template</button></div>'+S.templates.map(t=>'<div class="n-item"><button class="b alt sm" data-tp="'+t.template_id+'" style="float:right">Edit</button><b>'+esc(t.name)+'</b><div class="mute">'+(t.fields.map(f=>esc(f.field_name)+' ('+esc(f.field_type)+')').join(', ')||'tanpa field kustom')+'</div></div>').join('')+'</div>'+
  '<div class="card"><h2>Pengaturan Power &amp; Notifikasi</h2><div class="mute" style="margin-bottom:8px">Satuan: Power = MW · GHE = kWh/t · Calcine = t/h (= Power × 1000 ÷ GHE)</div>'+inp('c_i','Interval default planned power (jam)',S.cfg.INTERVAL_H)+sel('c_m','Metode Calcine per interval',['START','AVERAGE'],S.cfg.CALCINE_METHOD)+inp('c_f','Versi rumus (catat setiap perubahan)',S.cfg.FORMULA_VERSION)+inp('c_a','Approaching: jam sebelum Planned Finish',S.cfg.APPROACH_H)+'<button class="b" id="cs">Simpan pengaturan</button></div>'+
- '<div class="card"><h2>Matriks izin</h2><div class="mute" style="margin-bottom:6px">Pilih fitur yang terbuka untuk siapa saja atau perlu password (isi di sheet PASWORD, sel A1). Mengubah matriks ini selalu perlu password.</div><div class="tw"><table><tr><th>Fitur</th><th>Akses</th></tr>'+
- Object.keys(S.perms).map(k=>'<tr><td>'+esc(S.perms[k].label)+'</td><td><select data-pm="'+k+'"><option value="OPEN"'+(S.perms[k].mode==='OPEN'?' selected':'')+'>Terbuka</option><option value="PASSWORD"'+(S.perms[k].mode==='PASSWORD'?' selected':'')+'>Perlu password</option></select></td></tr>').join('')+
- '<tr><td>Ubah matriks izin ini</td><td class="mute">Perlu password (tetap)</td></tr></table></div><button class="b" id="pms" style="margin-top:8px">Simpan matriks izin</button></div>';
+ '<div class="card"><h2>Password edit</h2><div class="mute" style="margin-bottom:8px">Dipakai untuk fitur terkunci: tambah/edit/hapus task, grid jam, template, pengaturan, hapus project. Di Firebase hanya tersimpan hash-nya, bukan teks asli.</div>'+inp('pw_new','Password baru (min. 6 karakter)','','password')+'<div class="tb"><button class="b" id="pwchg">Ganti password</button><button class="b alt" id="pwset">Atur password awal</button></div><div class="mute">Ganti password: password lama akan diminta lebih dulu. Atur password awal: hanya berhasil bila belum pernah ada password.</div></div>';
  el.innerHTML=h;
  $('pj').onclick=()=>pjDlg();el.querySelectorAll('[data-pj]').forEach(b=>b.onclick=()=>pjDlg(S.projects.find(p=>p.shutdown_id===b.dataset.pj)));
  const pt=$('pjtab'),upd=()=>{const n=pt.querySelectorAll('.rk:checked').length;$('pjsel').textContent=n?n+' dipilih':'';$('pjarc').disabled=$('pjdel').disabled=!n;},pids=()=>[...pt.querySelectorAll('.rk:checked')].map(x=>x.closest('tr').dataset.id);
@@ -509,7 +1087,7 @@ function renderAd(){
   await call('deleteProjects',{ids});await reload();toast('Project dihapus');},$('pjdel'));
  $('tp').onclick=()=>tplDlg();el.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>tplDlg(S.templates.find(t=>t.template_id===b.dataset.tp)));
  $('cs').onclick=()=>run(async()=>{await call('saveSettings',{cfg:{INTERVAL_H:gv('c_i'),CALCINE_METHOD:gv('c_m'),FORMULA_VERSION:gv('c_f'),APPROACH_H:gv('c_a')}});toast('Pengaturan tersimpan');await boot2();},$('cs'));
- $('pms').onclick=()=>run(async()=>{const perms={};el.querySelectorAll('[data-pm]').forEach(x=>perms[x.dataset.pm]=x.value);S.perms=await call('savePerms',{perms});toast('Matriks izin tersimpan');S.dirty.ad=1;paint('ad');},$('pms'));}
+ $('pwchg').onclick=()=>run(async()=>{await ensurePw('matrix_edit');await call('changePassword',{newpw:gv('pw_new')});$('pw_new').value='';toast('Password diganti');},$('pwchg'));$('pwset').onclick=()=>run(async()=>{const v=gv('pw_new');await call('setPassword',{pw:v});S.pw=v;$('pw_new').value='';toast('Password awal dibuat');},$('pwset'));}
 async function boot2(){const d=await call('bootstrap');Object.assign(S,d);await refresh();}
 function pjDlg(p){p=p||{};const to=S.templates.map(t=>t.template_id+' | '+t.name);modal(p.shutdown_id?'Edit project':'Project baru',inp('j_n','Nama shutdown',pn(p.name)||'')+sel('j_t','Template',to,to.find(x=>x.startsWith((p.template_id||'~')+' '))||to[0])+inp('j_s','Mulai',p.start_date||'','date')+inp('j_e','Selesai',p.end_date||'','date')+sel('j_st','Status',['Active','Completed','Archived'],p.status||'Active'),
  async()=>{await call('saveProject',{project:{shutdown_id:p.shutdown_id,name:gv('j_n'),template_id:gv('j_t').split(' | ')[0],start_date:gv('j_s'),end_date:gv('j_e'),status:gv('j_st')}});const d=await call('bootstrap');Object.assign(S,d);fillProj();});}
