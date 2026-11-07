@@ -81,7 +81,7 @@ tr.sel td{background:color-mix(in srgb,var(--warn) 30%,transparent)}.ph-RD{borde
 .hlab{display:flex;gap:2px;font-size:10px;color:var(--mute);font-weight:400;margin-top:2px}.hlab span{width:20px;text-align:center}
 tr.grp th{text-align:center;font-size:11px;letter-spacing:.6px;border-bottom:2px solid var(--line)}tr.grp th.gp{color:var(--rd);border-color:var(--rd)}tr.grp th.ga{color:var(--ru);border-color:var(--ru)}
 .chartwrap{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}@media(min-width:1180px){.chartwrap{grid-template-columns:minmax(0,1fr) 310px}}
-.opnote{border:2px solid var(--ok);border-radius:18px;padding:12px 15px;font-size:12.5px;line-height:1.55;max-height:440px;overflow:auto;background:color-mix(in srgb,var(--ok) 5%,var(--card))}.opnote h4{margin:0 0 6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+input.dt{min-width:108px;width:108px}input.tm{min-width:70px;width:70px}.nb{gap:6px;margin-bottom:8px;flex-wrap:wrap}.opnote{border:2px solid var(--ok);border-radius:18px;padding:12px 15px;font-size:12.5px;line-height:1.55;max-height:440px;overflow:auto;background:color-mix(in srgb,var(--ok) 5%,var(--card))}.opnote h4{margin:0 0 6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
 .sel-bar{display:flex;gap:8px;align-items:center;margin:4px 0 8px;font-size:13px;color:var(--mute);min-height:28px}
 .help{font-size:12.5px;color:var(--mute);margin-bottom:8px}.help summary{cursor:pointer;display:inline}
 .fgrp{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.fgrp label{font-size:12px;color:var(--mute)}
@@ -531,7 +531,7 @@ const ACTIONS = {
   setProjectStatus: { w: 'project_edit', f: (u, p) => { if (['Active', 'Completed', 'Archived'].indexOf(p.status) < 0) throw new Error('Status tidak valid.');
     const ids = {}; (p.ids || []).forEach(i => ids[i] = 1); rows_('SHUTDOWN_MASTER').forEach(r => { if (ids[r.shutdown_id]) set_('SHUTDOWN_MASTER', r._row, { status: p.status }); }); return true; } },
   saveOpNote: { w: 'power_edit', f: (u, p) => {   // catatan operasi (teks bebas) di samping grafik
-    const k = 'OPNOTE_' + p.shutdown_id, v = String(p.note || '').slice(0, 8000), r = rows_('SETTINGS').find(x => x.key === k);
+    const k = 'OPNOTE_' + p.shutdown_id, v = String(p.note || '').slice(0, 20000), r = rows_('SETTINGS').find(x => x.key === k);
     if (r) set_('SETTINGS', r._row, { value: v }); else add_('SETTINGS', { key: k, value: v, description: 'Catatan operasi project' });
     logP_('NOTE', u, 'op_note', '', v.slice(0, 100), now_()); return getPower_(u, { shutdown_id: p.shutdown_id }); } },
   taskLog: { f: (u, p) => rows_('MAINTENANCE_LOG').filter(l => l.task_id === p.task_id).reverse() },
@@ -739,9 +739,14 @@ const pfields=()=>tpl().fields.concat((S.localFields||[]).filter(f=>f.template_i
 const liveTasks=()=>S.tasks.filter(t=>t.archived!=='Y');
 
 /* ---- Kartu grafik + catatan operasi ---- */
-function noteHTML(t){return t?esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>'):'<span class="mute">Belum ada catatan. Klik ✎ untuk menulis catatan pengoperasian (slag level, posisi elektroda, dsb.).</span>';}
+function noteHTML(t){if(t&&String(t).startsWith('<!--h-->'))return cleanHtml(String(t).slice(8));return t?esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>'):'<span class="mute">Belum ada catatan. Klik ✎ untuk menulis catatan pengoperasian (slag level, posisi elektroda, dsb.).</span>';}
 function chartCard(){return '<div class="card"><h2>Power vs Time</h2><div class="chartwrap"><div class="chartbox"></div><aside class="opnote"><h4>Catatan operasi <button class="ib" data-opnote title="Edit catatan">✎</button></h4><div>'+noteHTML(S.power.note)+'</div></aside></div></div>';}
-function noteDlg(){modal('Catatan operasi',fld('','Teks catatan (**teks** = tebal · baris kosong = paragraf baru)','<textarea id="on_t" rows="14" style="width:100%">'+esc(S.power.note||'')+'</textarea>'),async()=>{await call('saveOpNote',{shutdown_id:S.sid,note:gv('on_t')});rerender();toast('Catatan tersimpan');});}
+function noteDlg(){const cur=S.power.note||'',init=cur?noteHTML(cur):'';
+ modal('Catatan operasi','<div class="tb nb"><button type="button" class="b alt sm" data-cmd="bold"><b>B</b></button><button type="button" class="b alt sm" data-cmd="italic"><i>I</i></button><button type="button" class="b alt sm" data-cmd="underline"><u>U</u></button><button type="button" class="b alt sm" data-cmd="foreColor" data-v="#ef4444" style="color:#ef4444;font-weight:700">A merah</button><button type="button" class="b alt sm" data-cmd="hiliteColor" data-v="#fde047" style="background:#fde047;color:#000">Stabilo</button><button type="button" class="b alt sm" data-cmd="foreColor" data-v="#22c55e" style="color:#22c55e;font-weight:700">A hijau</button><button type="button" class="b alt sm" data-cmd="removeFormat">Hapus format</button></div><div id="on_t" contenteditable="true" style="min-height:260px;max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;line-height:1.55"></div><div class="mute" style="font-size:12px;margin-top:6px">Blok teks lalu klik tombol format. Teks yang ditempel masuk sebagai teks polos.</div>',
+  async()=>{const h=cleanHtml($('on_t').innerHTML);await call('saveOpNote',{shutdown_id:S.sid,note:h.replace(/<br>|<div><\/div>|\s/g,'')?'<!--h-->'+h:''});rerender();toast('Catatan tersimpan');},'Simpan',1);
+ const ed=$('on_t');ed.innerHTML=init;
+ $('mb').querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{ed.focus();document.execCommand('styleWithCSS',false,true);document.execCommand(b.dataset.cmd,false,b.dataset.v||null);};});
+ ed.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));});}
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('[data-opnote]'))noteDlg();});
 
 /* ---- Overview ---- */
@@ -873,27 +878,41 @@ function pwEdit(cells,cal,full){ // edit satu/banyak sel: layar berubah seketika
 function updPw(){drawCalc(); // perbarui nilai, delta, calcine & total tanpa mengganti tabel (fokus input tidak hilang)
  const root=$('s-pw'),im={},sc={},act=document.activeElement;S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);S.power.schedule.forEach(r=>sc[r.schedule_id]=r);
  root.querySelectorAll('tr[data-id]').forEach(tr=>{const r=sc[tr.dataset.id];if(!r)return;const iv=im[r.schedule_id];
-  tr.querySelectorAll('input[data-f]').forEach(el=>{if(el===act)return;const v=r[el.dataset.f],nv=el.type==='datetime-local'?toI(v):(v==null?'':v);if(el.value!==String(nv))el.value=nv;});
+  tr.querySelectorAll('input[data-f]').forEach(el=>{if(el===act)return;const v=r[el.dataset.f],pp=el.dataset.p,nv=pp==='d'?dPart(v):pp==='t'?tPart(v):(v==null?'':v);if(el.value!==String(nv))el.value=nv;});
   tr.querySelectorAll('input[data-cf]').forEach(el=>{if(!iv)return;el.dataset.iv=iv.interval_id;const k=el.dataset.cf;if(el!==act)el.value=iv[k+'_calcine']||'';el.classList.toggle('man',iv[k+'_calcine_mode']==='Manual');});
   const set=(c,v)=>{const e=tr.querySelector(c);if(!e)return;e.textContent=isNaN(v)?'-':f2(v);e.className='dev '+c.slice(1)+(v>0?' pos':' neg');};
   set('.dP',N(r.actual_power)-N(r.planned_power));set('.dG',N(r.actual_ghe)-N(r.planned_ghe));set('.dC',iv?N(iv.actual_calcine)-N(iv.planned_calcine):NaN);});
  PHASES.forEach(ph=>{const e=root.querySelector('.ptot[data-ph="'+ph+'"]');if(!e)return;const I=S.power.intervals.filter(i=>i.phase===ph);
   e.innerHTML='Total Calcine '+ph+' (t/h × durasi): plan <b>'+f2(I.reduce((a,i)=>a+(N(i.planned_calcine)||0)*(N(i.duration_h)||0),0))+'</b> ton · actual <b>'+f2(I.reduce((a,i)=>a+(N(i.actual_calcine)||0)*(N(i.duration_h)||0),0))+'</b> ton';});}
+
+const dPart=v=>{const m=String(v||'').match(/^(\d{4})-(\d\d)-(\d\d)/);return m?m[3]+'/'+m[2]+'/'+m[1]:'';};
+const tPart=v=>{const m=String(v||'').match(/[ T](\d{2}:\d{2})/);return m?m[1]:'';};
+function joinDT(d,t){d=String(d||'').trim();t=String(t||'').trim();if(!d&&!t)return '';if(!d)return null;const x=pDT(d);if(!x)return null;let tt='';
+ if(t){tt=pT(t);if(!tt){const q=Number(t.replace(',','.'));if(t!==''&&!isNaN(q)&&q>=0&&q<1){const m=Math.round(q*1440);tt=z(Math.floor(m/60))+':'+z(m%60);}else return null;}}
+ return x.slice(0,10)+' '+(tt||x.slice(11,16)||'00:00');}
+function cleanHtml(h){const d=document.createElement('div');d.innerHTML=h;const OK={B:1,STRONG:1,I:1,EM:1,U:1,BR:1,P:1,DIV:1,SPAN:1,FONT:1,MARK:1},col=/^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\)|[a-z]+)$/i;
+ const walk=n=>{[...n.childNodes].forEach(c=>{if(c.nodeType===3)return;if(c.nodeType!==1){c.remove();return;}walk(c);
+  if(!OK[c.tagName]){if(/^(SCRIPT|STYLE)$/.test(c.tagName))c.remove();else c.replaceWith(...c.childNodes);return;}
+  const st=[];['color','background-color'].forEach(k=>{const v=c.style.getPropertyValue(k);if(v&&col.test(v.trim()))st.push(k+':'+v.trim());});
+  const fc=c.tagName==='FONT'&&c.getAttribute('color');[...c.attributes].forEach(a=>c.removeAttribute(a.name));
+  if(st.length)c.setAttribute('style',st.join(';'));else if(fc&&col.test(fc))c.setAttribute('style','color:'+fc);});};
+ walk(d);return d.innerHTML;}
 function pwRow(r,iv){
+ const dtc=(k,c)=>'<td><input type="text" class="dt" data-f="'+k+'" data-p="d" data-c="'+c+'" value="'+dPart(r[k])+'" placeholder="dd/mm/yyyy"></td><td><input type="text" class="tm" data-f="'+k+'" data-p="t" data-c="'+(c+1)+'" value="'+tPart(r[k])+'" placeholder="hh:mm"></td>';
  const gi=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'"><span class="hd" data-f="'+k+'" title="Seret untuk mengisi GHE"></span>';
  const ci=(k,c)=>iv?'<input class="n'+(iv[k+'_calcine_mode']==='Manual'?' man':'')+'" type="number" step="any" min="0" data-cf="'+k+'" data-c="'+c+'" data-iv="'+iv.interval_id+'" value="'+esc(iv[k+'_calcine'])+'" title="Otomatis = Power × 1000 / GHE. Ketik angka untuk input manual, kosongkan untuk kembali otomatis.">':'<span class="mute">–</span>';
  const nn=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'">';
- return '<tr data-id="'+r.schedule_id+'" data-ph="'+r.phase+'"><td class="ck"><input type="checkbox" class="rk"></td><td><input type="datetime-local" data-f="schedule_datetime" data-c="0" value="'+toI(r.schedule_datetime)+'"></td><td>'+nn('planned_power',1)+'</td><td>'+gi('planned_ghe',2)+'</td><td>'+ci('planned',3)+'</td>'+
- '<td><input type="datetime-local" data-f="actual_datetime" data-c="4" value="'+toI(r.actual_datetime)+'"></td><td>'+nn('actual_power',5)+'</td><td>'+gi('actual_ghe',6)+'</td><td>'+ci('actual',7)+'</td>'+
- '<td class="dev dP"></td><td class="dev dG"></td><td class="dev dC"></td><td><input type="text" data-f="remark" data-c="8" value="'+esc(r.remark)+'" placeholder="keterangan titik" style="min-width:170px"></td></tr>';}
+ return '<tr data-id="'+r.schedule_id+'" data-ph="'+r.phase+'"><td class="ck"><input type="checkbox" class="rk"></td>'+dtc('schedule_datetime',0)+'<td>'+nn('planned_power',2)+'</td><td>'+gi('planned_ghe',3)+'</td><td>'+ci('planned',4)+'</td>'+
+ dtc('actual_datetime',5)+'<td>'+nn('actual_power',7)+'</td><td>'+gi('actual_ghe',8)+'</td><td>'+ci('actual',9)+'</td>'+
+ '<td class="dev dP"></td><td class="dev dG"></td><td class="dev dC"></td><td><input type="text" data-f="remark" data-c="10" value="'+esc(r.remark)+'" placeholder="keterangan titik" style="min-width:170px"></td></tr>';}
 function renderPw(){
  const sc=S.power.schedule,im={};S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);
  let h=chartCard()+calcCard()+'<div class="card"><div class="tb"><h2 style="margin:0;flex:1">Jadwal power &amp; GHE</h2><button class="b" id="pgen">Generate planned power</button><button class="b alt" id="pimp">⬆ Import Excel</button><button class="b alt" id="padd">+ Titik manual</button></div>'+
- '<div class="help">Satuan: <b>Power = MW</b> · <b>GHE = kWh/t</b> · <b>Calcine = t/h</b> (= Power × 1000 ÷ GHE), total per fase dalam <b>ton</b>. <details><summary>Petunjuk pengisian</summary><ul style="margin:6px 0 0 18px;padding:0"><li>Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik); klik titik atau aktivitas di grafik untuk mengubah keterangannya.</li><li>Tempel dari Excel: salin kolom/blok di Excel, klik sel tujuan di tabel, Ctrl+V. Terisi ke bawah (dan ke kanan bila beberapa kolom).</li><li>GHE: seret kotak kecil di samping sel GHE ke bawah untuk mengisi nilai yang sama.</li><li>Calcine otomatis; ketik angka untuk input manual (kotak kuning), kosongkan untuk kembali otomatis. Rumus aktif: '+esc(S.cfg.FORMULA_VERSION||'')+'</li><li>Centang beberapa baris lalu <b>Hapus terpilih</b> untuk menghapus sekaligus.</li></ul></details></div>';
+ '<div class="help">Satuan: <b>Power = MW</b> · <b>GHE = kWh/t</b> · <b>Calcine = t/h</b> (= Power × 1000 ÷ GHE), total per fase dalam <b>ton</b>. <details><summary>Petunjuk pengisian</summary><ul style="margin:6px 0 0 18px;padding:0"><li>Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik); klik titik atau aktivitas di grafik untuk mengubah keterangannya.</li><li>Tempel dari Excel: salin kolom/blok di Excel, klik sel tujuan di tabel, Ctrl+V. Terisi ke bawah (dan ke kanan bila beberapa kolom). Urutan kolom tabel: Tanggal · Jam · Power · GHE · Calcine (Plan), lalu Tanggal · Jam · Power · GHE · Calcine (Actual), Δ, Keterangan. Format tanggal bebas: 17-Nov-26, 17/11/2026, atau 2026-11-17; jam: 16:00.</li><li>GHE: seret kotak kecil di samping sel GHE ke bawah untuk mengisi nilai yang sama.</li><li>Calcine otomatis; ketik angka untuk input manual (kotak kuning), kosongkan untuk kembali otomatis. Rumus aktif: '+esc(S.cfg.FORMULA_VERSION||'')+'</li><li>Centang beberapa baris lalu <b>Hapus terpilih</b> untuk menghapus sekaligus.</li></ul></details></div>';
  PHASES2.forEach(([ph,cl])=>{const Rw=sc.filter(r=>r.phase===ph);
   h+='<div class="tb" style="margin-top:14px"><h3 style="margin:0;flex:1">'+ph+'</h3><span class="mute selcnt" data-ph="'+ph+'"></span><button class="b alt sm bulkp" data-ph="'+ph+'" disabled style="color:var(--bad)">🗑 Hapus terpilih</button></div><div class="tw"><table class="'+cl+'" data-ph="'+ph+'">'+
-  '<tr class="grp"><th></th><th colspan="4" class="gp">PLAN</th><th colspan="4" class="ga">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th></th></tr><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>DateTime</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>DateTime</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Power</th><th>GHE</th><th>Calcine</th><th>Keterangan</th></tr>'+
-  (Rw.map(r=>pwRow(r,im[r.schedule_id])).join('')||'<tr><td colspan="13">'+empty('Belum ada titik. Gunakan Generate, Import Excel, klik grafik, atau + Titik manual.')+'</td></tr>')+'</table></div><div class="mute ptot" data-ph="'+ph+'" style="margin-top:6px"></div>';});
+  '<tr class="grp"><th></th><th colspan="5" class="gp">PLAN</th><th colspan="5" class="ga">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th></th></tr><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Tanggal</th><th>Jam</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Tanggal</th><th>Jam</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Power</th><th>GHE</th><th>Calcine</th><th>Keterangan</th></tr>'+
+  (Rw.map(r=>pwRow(r,im[r.schedule_id])).join('')||'<tr><td colspan="15">'+empty('Belum ada titik. Gunakan Generate, Import Excel, klik grafik, atau + Titik manual.')+'</td></tr>')+'</table></div><div class="mute ptot" data-ph="'+ph+'" style="margin-top:6px"></div>';});
  const dur=(a,b)=>a&&b&&isFinite(+D(a))&&isFinite(+D(b))?f2((+D(b)-+D(a))/36e5)+' jam':'';
  h+='</div><div class="card"><div class="tb"><h2 style="margin:0;flex:1">Aktivitas operasional</h2><span class="mute selcnt" data-ph="act"></span><button class="b alt sm bulkp" data-ph="act" disabled style="color:var(--bad)">🗑 Hapus terpilih</button><button class="b" id="aadd">+ Aktivitas</button></div><div class="tw"><table data-ph="act"><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Fase</th><th>Aktivitas</th><th>Planned (mulai → selesai)</th><th>Actual (mulai → selesai)</th><th>Durasi</th><th>Status</th><th>Keterangan</th><th></th></tr>'+
  (S.power.activities.map(a=>'<tr data-id="'+a.activity_id+'"><td class="ck"><input type="checkbox" class="rk"></td><td>'+esc(a.phase)+'</td><td>'+esc(a.activity_name)+'</td><td>'+esc(a.planned_datetime)+(a.planned_end?' → '+esc(a.planned_end):'')+'</td><td>'+esc(a.actual_datetime)+(a.actual_end?' → '+esc(a.actual_end):'')+'</td><td>'+(dur(a.planned_datetime,a.planned_end)||dur(a.actual_datetime,a.actual_end))+'</td><td>'+bdg(a.status_eff)+'</td><td>'+esc(a.remark)+'</td><td><button class="ib" data-act="'+a.activity_id+'" title="Edit">✎</button></td></tr>').join('')||'<tr><td colspan="9">'+empty('Belum ada aktivitas. Klik grafik atau "+ Aktivitas".')+'</td></tr>')+'</table></div></div>';
@@ -915,7 +934,10 @@ function initPw(){ // listener tunggal (delegasi): edit sel, centang baris, hapu
  el.addEventListener('change',e=>{const i=e.target;
   if(i.classList.contains('rkall')){const t=i.closest('table');t.querySelectorAll('.rk').forEach(x=>x.checked=i.checked);selUpd(t);return;}
   if(i.classList.contains('rk')){selUpd(i.closest('table'));return;}
-  if(i.matches('input[data-f]')){const f=i.dataset.f;pwEdit([{id:i.closest('tr').dataset.id,f,v:i.type==='datetime-local'?toS(i.value):i.value}],[],f==='schedule_datetime');}
+  if(i.matches('input[data-f]')){const f=i.dataset.f,tr=i.closest('tr'),id=tr.dataset.id;let v=i.value;
+   if(i.dataset.p){const dv=tr.querySelector('input[data-f="'+f+'"][data-p="d"]'),tv=tr.querySelector('input[data-f="'+f+'"][data-p="t"]');v=joinDT(dv.value,tv.value);
+    if(v===null){const r0=S.power.schedule.find(x=>x.schedule_id===id)||{};dv.value=dPart(r0[f]);tv.value=tPart(r0[f]);toast('Format tanggal/jam tidak terbaca.',1);return;}}
+   pwEdit([{id,f,v}],[],f==='schedule_datetime');}
   else if(i.matches('input[data-cf]'))pwEdit([],[{iv:i.dataset.iv,f:i.dataset.cf,v:i.value}],false);});
  el.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.bulkp');if(!b)return;const tbl=el.querySelector('table[data-ph="'+b.dataset.ph+'"]'),ids=[...tbl.querySelectorAll('.rk:checked')].map(x=>x.closest('tr').dataset.id);
   if(b.dataset.ph==='act')bulkDelAct(ids);else bulkDelP(ids);});
@@ -923,12 +945,15 @@ function initPw(){ // listener tunggal (delegasi): edit sel, centang baris, hapu
   const txt=(e.clipboardData||window.clipboardData).getData('text').replace(/\r/g,'').replace(/\n+$/,'');
   if(!/[\n\t]/.test(txt))return; // 1 sel saja: tempel biasa
   e.preventDefault();
-  const grid=txt.split('\n').map(l=>l.split('\t')),trs=[...inp.closest('table').querySelectorAll('tr[data-id]')],r0=trs.indexOf(inp.closest('tr')),c0=+inp.dataset.c,cells=[],cal=[];let cut=0,bad=0;
+  const grid=txt.split('\n').map(l=>l.split('\t')),trs=[...inp.closest('table').querySelectorAll('tr[data-id]')],r0=trs.indexOf(inp.closest('tr')),c0=+inp.dataset.c,cells=[],cal=[],parts={};let cut=0,bad=0;
   grid.forEach((cols,ri)=>{const tr=trs[r0+ri];if(!tr){cut++;return;}
    cols.forEach((raw,ci)=>{const el2=tr.querySelector('input[data-c="'+(c0+ci)+'"]');if(!el2)return;const t=raw.trim();
+    if(el2.dataset.p){const k=tr.dataset.id+'|'+el2.dataset.f;(parts[k]=parts[k]||{id:tr.dataset.id,f:el2.dataset.f})[el2.dataset.p]=t;return;}
     if(el2.dataset.f==='remark'){cells.push({id:tr.dataset.id,f:'remark',v:t});}
     else if(el2.dataset.f){let v;if(/datetime/.test(el2.dataset.f)){v=t===''?'':pDT(t);if(t!==''&&!v){bad++;return;}}else{v=t===''?'':pNum(t);if(t!==''&&v===''){bad++;return;}}cells.push({id:tr.dataset.id,f:el2.dataset.f,v:String(v)});}
     else if(el2.dataset.cf){const v=t===''?'':pNum(t);if(t!==''&&v===''){bad++;return;}cal.push({iv:el2.dataset.iv,f:el2.dataset.cf,v:String(v)});}});});
+  Object.values(parts).forEach(o=>{const r0=S.power.schedule.find(x=>x.schedule_id===o.id)||{};
+   const v=(o.d===''&&o.t==null)?'':joinDT(o.d!=null?o.d:dPart(r0[o.f]),o.t!=null?o.t:tPart(r0[o.f]));if(v===null){bad++;return;}cells.push({id:o.id,f:o.f,v});});
   if(!cells.length&&!cal.length)return toast('Tidak ada sel valid pada data yang ditempel.',1);
   pwEdit(cells,cal,cells.some(c=>c.f==='schedule_datetime'));
   if(cut||bad)toast((cut?cut+' baris melebihi tabel diabaikan. ':'')+(bad?bad+' sel tidak terbaca diabaikan.':''),1);});}
@@ -970,6 +995,7 @@ function chartHTML(){
  const raw=S.power.schedule,sc=raw.filter(r=>isFinite(+D(r.schedule_datetime))),ac=S.power.activities;
  if(!raw.length)return empty('Belum ada data power. Generate jadwal, impor dari Excel, atau tambah titik manual di menu Power.');
  if(!sc.length)return empty('Tanggal pada jadwal power tidak terbaca. Pastikan Code.gs terbaru sudah di-deploy sebagai versi baru, lalu muat ulang halaman.');
+ if(S.coffSid!==S.sid){S.coffSid=S.sid;try{S.coff=JSON.parse(localStorage.getItem('fsm_co_'+S.sid)||'{}');}catch(e){S.coff={};}}
  const cv=S.cv,W=960,H=340,L=50,Rr=16,T=34,B=44,col={'Ramp Down':'var(--rd)','Ramp Up':'var(--ru)'};S.pts=[];
  const times=[];sc.forEach(r=>{times.push(+D(r.schedule_datetime));if(r.actual_datetime)times.push(+D(r.actual_datetime));});
  ac.forEach(a=>['planned_datetime','planned_end','actual_datetime','actual_end'].forEach(k=>{if(a[k])times.push(+D(a[k]));}));
@@ -998,14 +1024,14 @@ function chartHTML(){
   else s+='<text transform="translate('+(x+4)+','+(H-B-4)+') rotate(-90)" font-size="10" fill="'+c+'">'+esc(a.activity_name)+'</text>';
   s+='<path d="M'+x+' '+(T-2)+'l5 6l-5 6l-5-6z" fill="'+(act?c:'var(--card)')+'" stroke="'+c+'"/>';}));
  const co=[];
- if(cv.n){sc.forEach(r=>{if(!r.remark)return;const py=!isNaN(N(r.planned_power))?N(r.planned_power):N(r.actual_power);if(isNaN(py))return;co.push({x:X(+D(r.schedule_datetime)),y:Y(py),txt:String(r.schedule_datetime).slice(5,16)+' · '+f2(py)+' MW — '+r.remark});});
-  ac.forEach(a=>{if(!a.remark||!a.planned_datetime||!isFinite(+D(a.planned_datetime)))return;const ms=+D(a.planned_datetime);co.push({x:X(ms),y:Y(pAt(ms)),txt:a.activity_name+' — '+a.remark});});}
- co.sort((p,q)=>p.x-q.x).forEach((c,i)=>{const bw=158,ln=wrapT(c.txt,30,4),bh=10+ln.length*12,bx=Math.max(L+2,Math.min(c.x-30,W-Rr-bw)),by=T+6+(i%3)*62;
-  s+='<line x1="'+Math.min(Math.max(c.x,bx+10),bx+bw-10)+'" y1="'+(by+bh)+'" x2="'+c.x+'" y2="'+c.y+'" stroke="var(--mute)" stroke-width=".9"/><rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="5" fill="var(--card)" stroke="var(--mute)" opacity=".97"/>'+
-   ln.map((l,j)=>'<text x="'+(bx+6)+'" y="'+(by+13+j*12)+'" font-size="10" fill="var(--tx)">'+esc(l)+'</text>').join('');});
+ if(cv.n){sc.forEach(r=>{if(!r.remark)return;const py=!isNaN(N(r.planned_power))?N(r.planned_power):N(r.actual_power);if(isNaN(py))return;co.push({id:r.schedule_id,x:X(+D(r.schedule_datetime)),y:Y(py),txt:String(r.schedule_datetime).slice(5,16)+' · '+f2(py)+' MW — '+r.remark});});
+  ac.forEach(a=>{if(!a.remark||!a.planned_datetime||!isFinite(+D(a.planned_datetime)))return;const ms=+D(a.planned_datetime);co.push({id:a.activity_id,x:X(ms),y:Y(pAt(ms)),txt:a.activity_name+' — '+a.remark});});}
+ co.sort((p,q)=>p.x-q.x).forEach((c,i)=>{const bw=158,ln=wrapT(c.txt,30,4),bh=10+ln.length*12,bx=Math.max(L+2,Math.min(c.x-30,W-Rr-bw)),by=T+6+(i%3)*62,o=S.coff[c.id]||[0,0];
+  s+='<g class="co" data-id="'+c.id+'" data-bx="'+bx+'" data-by="'+by+'" data-bw="'+bw+'" data-bh="'+bh+'" data-cx="'+c.x+'" style="cursor:move;touch-action:none"><title>Seret untuk memindahkan · klik 2x untuk reset posisi</title><line x1="'+Math.min(Math.max(c.x,bx+o[0]+10),bx+o[0]+bw-10)+'" y1="'+(by+o[1]+bh)+'" x2="'+c.x+'" y2="'+c.y+'" stroke="var(--mute)" stroke-width=".9"/><g class="cb" transform="translate('+o[0]+' '+o[1]+')"><rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="5" fill="var(--card)" stroke="var(--mute)" opacity=".97"/>'+
+   ln.map((l,j)=>'<text x="'+(bx+6)+'" y="'+(by+13+j*12)+'" font-size="10" fill="var(--tx)">'+esc(l)+'</text>').join('')+'</g></g>';});
  s+='<line class="xh" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--tx)" stroke-width="1" style="display:none"/><circle class="cdot" r="6" fill="none" stroke="var(--tx)" stroke-width="2" style="display:none"/></svg><div class="tip"></div>';
  const ck=(k,l)=>'<label><input type="checkbox" '+(cv[k]?'checked':'')+' onchange="cvT(\''+k+'\',this.checked)">'+l+'</label>';
- return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','Planned (putus-putus)')+ck('a','Actual (garis penuh)')+ck('k','Aktivitas')+ck('n','Keterangan (callout)')+'</div><div class="mute" style="font-size:12px;margin-top:4px">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Klik titik atau aktivitas yang ada untuk mengubah keterangannya.</div>';}
+ return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','Planned (putus-putus)')+ck('a','Actual (garis penuh)')+ck('k','Aktivitas')+ck('n','Keterangan (callout)')+'</div><div class="mute" style="font-size:12px;margin-top:4px">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Klik titik atau aktivitas yang ada untuk mengubah keterangannya. Kotak keterangan bisa digeser (klik 2x untuk reset).</div>';}
 function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const tip=box.querySelector('.tip'),xh=svg.querySelector('.xh'),dot=svg.querySelector('.cdot');svg.style.cursor='crosshair';
  const hide=()=>{tip.style.display='none';xh.style.display='none';dot.style.display='none';};
  svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*340;let b=null,bd=1e9;
@@ -1013,7 +1039,15 @@ function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const 
   xh.setAttribute('x1',b.x);xh.setAttribute('x2',b.x);xh.style.display='';dot.setAttribute('cx',b.x);dot.setAttribute('cy',b.y);dot.style.display='';
   tip.innerHTML=b.t;tip.style.display='block';tip.style.left=Math.max(0,Math.min(e.clientX-r.left+12,r.width-220))+'px';tip.style.top=(e.clientY-r.top+14)+'px';};
  svg.onmouseleave=hide;
- svg.onclick=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*340,m=S.cm;if(!m)return;
+ const saveCo=()=>{try{localStorage.setItem('fsm_co_'+S.sid,JSON.stringify(S.coff));}catch(e){}};
+ svg.querySelectorAll('.co').forEach(g=>{const id=g.dataset.id,bx=+g.dataset.bx,by=+g.dataset.by,bw=+g.dataset.bw,bh=+g.dataset.bh,cx=+g.dataset.cx;
+  const place=(dx,dy)=>{g.querySelector('.cb').setAttribute('transform','translate('+dx+' '+dy+')');const ln=g.querySelector('line');ln.setAttribute('x1',Math.min(Math.max(cx,bx+dx+10),bx+dx+bw-10));ln.setAttribute('y1',by+dy+bh);};
+  g.onpointerdown=e=>{e.preventDefault();e.stopPropagation();const k=960/svg.getBoundingClientRect().width,o=(S.coff[id]||[0,0]).slice(),x0=e.clientX,y0=e.clientY;let moved=0;
+   const mv=ev=>{moved=1;const d=[o[0]+(ev.clientX-x0)*k,o[1]+(ev.clientY-y0)*k];S.coff[id]=d;place(d[0],d[1]);};
+   const up=()=>{document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);if(moved){S.noClick=1;setTimeout(()=>S.noClick=0,80);saveCo();}};
+   document.addEventListener('pointermove',mv);document.addEventListener('pointerup',up);};
+  g.ondblclick=e=>{e.stopPropagation();delete S.coff[id];saveCo();redrawCharts();};g.onclick=e=>e.stopPropagation();});
+ svg.onclick=e=>{if(S.noClick)return;const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*340,m=S.cm;if(!m)return;
   if(sx<m.L||sx>m.W-m.Rr||sy<m.T||sy>m.H-m.B)return;
   let b=null,bd=1e9;S.pts.forEach(p=>{if(!p.id)return;const d=Math.hypot(p.x-sx,p.y-sy);if(d<bd){bd=d;b=p;}});
   if(b&&bd<16){if(b.k==='p')ptEdit(S.power.schedule.find(x=>x.schedule_id===b.id));else actDlg(S.power.activities.find(x=>x.activity_id===b.id));return;}
