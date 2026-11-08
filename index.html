@@ -1010,22 +1010,32 @@ function chartHTML(){
  if(!raw.length)return empty('Belum ada data power. Generate jadwal, impor dari Excel, atau tambah titik manual di menu Power.');
  if(!sc.length)return empty('Tanggal pada jadwal power tidak terbaca. Pastikan Code.gs terbaru sudah di-deploy sebagai versi baru, lalu muat ulang halaman.');
  if(S.coffSid!==S.sid){S.coffSid=S.sid;try{S.coff=JSON.parse(localStorage.getItem('fsm_co_'+S.sid)||'{}');}catch(e){S.coff={};}}
- const cv=S.cv,W=960,H=340,L=50,Rr=16,T=34,B=44,col={'Ramp Down':'var(--rd)','Ramp Up':'var(--ru)'};S.pts=[];
+ const cv=S.cv,W=960,H=364,L=50,Rr=16,T=34,B=66,col={'Ramp Down':'var(--rd)','Ramp Up':'var(--ru)'};S.pts=[];
  const times=[];sc.forEach(r=>{times.push(+D(r.schedule_datetime));if(r.actual_datetime)times.push(+D(r.actual_datetime));});
  ac.forEach(a=>['planned_datetime','planned_end','actual_datetime','actual_end'].forEach(k=>{if(a[k])times.push(+D(a[k]));}));
  const tf=times.filter(isFinite),t0=Math.min(...tf),t1=Math.max(...tf)||t0+1,pw=sc.flatMap(r=>[N(r.planned_power),N(r.actual_power)]).filter(v=>!isNaN(v)),pm=Math.max(1,...pw),stp=[1,2,5,10,20,25,50,100,200,500].find(q=>pm*1.08/q<=7)||1000,ym=Math.ceil(pm*1.08/stp)*stp;
  S.cm={t0,t1,ym,W,H,L,Rr,T,B};
  const X=t=>L+(t-t0)/Math.max(t1-t0,1)*(W-L-Rr),Y=v=>T+(1-v/ym)*(H-T-B);let s='<svg viewBox="0 0 '+W+' '+H+'"><g font-size="11" fill="var(--mute)">';
  for(let v=0;v<=ym+1e-9;v+=stp){const y=Y(v);s+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+v+'</text>';}
- for(let i=0;i<=6;i++){const t=t0+(t1-t0)*i/6,d=new Date(t);s+='<text x="'+X(t)+'" y="'+(H-B+16)+'" text-anchor="middle">'+(d.getMonth()+1)+'/'+d.getDate()+' '+z(d.getHours())+':00</text>';}
+ {const hT=(t1-t0)/36e5,lab=[1,2,3,6,12,24].find(q=>hT/q<=64)||24,MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(let t=Math.ceil(t0/36e5)*36e5;t<=t1+1;t+=36e5){const d=new Date(t),h=d.getHours(),x=X(t);
+   s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(H-B+4)+'" stroke="var(--line)" opacity="'+(h===0?.9:.35)+'"/>';
+   if(h%lab===0)s+='<text transform="translate('+(x+3)+','+(H-B+8)+') rotate(-90)" text-anchor="end" font-size="9.5">'+z(h)+':00</text>';}
+  s+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+(H-22)+'" y2="'+(H-22)+'" stroke="var(--line)"/>';
+  const ds=new Date(t0);ds.setHours(0,0,0,0);
+  for(;+ds<=t1;ds.setDate(ds.getDate()+1)){const nx=new Date(ds);nx.setDate(nx.getDate()+1);const xa=X(Math.max(+ds,t0)),xb=X(Math.min(+nx,t1));
+   if(+ds>t0)s+='<line x1="'+xa+'" x2="'+xa+'" y1="'+(H-B)+'" y2="'+(H-2)+'" stroke="var(--mute)" opacity=".7"/>';
+   if(xb-xa>=44)s+='<text x="'+((xa+xb)/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--tx)">'+z(ds.getDate())+'-'+MN[ds.getMonth()]+'-'+String(ds.getFullYear()).slice(2)+'</text>';}}
  s+='<text x="12" y="'+(T-12)+'">MW</text></g>';
+ const hN=Math.max(1,(t1-t0)/36e5),rotL=(W-L-Rr)/hN<15,vlab=(p,da,ph)=>{const lx=+X(p[0]).toFixed(1),ly=Y(p[1]),v=Math.round(p[1]*10)/10,fs='font-size="9" font-weight="600" fill="'+col[ph]+'"';
+  return rotL?'<text transform="translate('+(lx+3)+','+(da?ly-7:ly+7)+') rotate(-90)" text-anchor="'+(da?'start':'end')+'" '+fs+'>'+v+'</text>':'<text x="'+lx+'" y="'+(da?ly-7:ly+15)+'" text-anchor="middle" '+fs+'>'+v+'</text>';};
  PHASES.forEach(ph=>{const R2=sc.filter(r=>r.phase===ph);if(!R2.length)return;const a=Math.min(...R2.map(r=>+D(r.schedule_datetime))),b=Math.max(...R2.map(r=>+D(r.schedule_datetime)));
   s+='<rect x="'+X(a)+'" y="'+T+'" width="'+Math.max(X(b)-X(a),2)+'" height="'+(H-T-B)+'" fill="'+col[ph]+'" opacity=".08"/><text x="'+(X(a)+4)+'" y="'+(H-B-6)+'" font-size="12" font-weight="600" fill="'+col[ph]+'">'+ph+'</text>';
   [['planned_power','schedule_datetime','planned_ghe','Planned',cv.p],['actual_power','actual_datetime','actual_ghe','Actual',cv.a]].forEach(([pk,tk,gk,lb,on])=>{if(!on)return;const da=lb==='Planned';
    const pts=R2.filter(r=>!isNaN(N(r[pk]))).map(r=>[+D(r[tk]||r.schedule_datetime),N(r[pk]),r]).filter(p=>isFinite(p[0])).sort((x,y)=>x[0]-y[0]);if(!pts.length)return;
    s+='<path d="'+pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('')+'" fill="none" stroke="'+col[ph]+'" stroke-width="2.4" '+(da?'stroke-dasharray="5 4"':'')+'/>'+
    pts.map(p=>{S.pts.push({x:X(p[0]),y:Y(p[1]),k:'p',id:p[2].schedule_id,t:'<b>'+ph+' · '+lb+'</b><br>'+esc(p[2][tk]||p[2].schedule_datetime)+'<br>'+f2(p[1])+' MW'+(p[2][gk]?' · GHE '+esc(p[2][gk])+' kWh/t':'')+(p[2].remark?'<br>'+esc(p[2].remark):'')});
-    return '<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(p[2].remark?4.6:da?2.6:3.6)+'" fill="'+(da?'var(--card)':col[ph])+'" stroke="'+col[ph]+'" stroke-width="'+(p[2].remark?2.4:1)+'"/>';}).join('');});});
+    return (cv.v?vlab(p,da,ph):'')+'<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(p[2].remark?4.6:da?2.6:3.6)+'" fill="'+(da?'var(--card)':col[ph])+'" stroke="'+col[ph]+'" stroke-width="'+(p[2].remark?2.4:1)+'"/>';}).join('');});});
  const cur=sc.filter(r=>!isNaN(N(r.planned_power))).map(r=>[+D(r.schedule_datetime),N(r.planned_power)]).sort((a,b)=>a[0]-b[0]);
  const pAt=ms=>{if(!cur.length)return 0;if(ms<=cur[0][0])return cur[0][1];for(let i=1;i<cur.length;i++)if(ms<=cur[i][0]){const a=cur[i-1],b=cur[i];return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(ms-a[0])/(b[0]-a[0]);}return cur[cur.length-1][1];};
  if(cv.k)ac.forEach(a=>[['planned_datetime','planned_end',0],['actual_datetime','actual_end',1]].forEach(([k,ke,act])=>{if(!a[k]||!isFinite(+D(a[k])))return;
@@ -1046,10 +1056,10 @@ function chartHTML(){
    ln.map((l,j)=>'<text x="'+(bx+6)+'" y="'+(by+13+j*12)+'" font-size="10" fill="var(--tx)">'+esc(l)+'</text>').join('')+'</g></g>';});
  s+='<line class="xh" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--tx)" stroke-width="1" style="display:none"/><circle class="cdot" r="6" fill="none" stroke="var(--tx)" stroke-width="2" style="display:none"/></svg><div class="tip"></div>';
  const ck=(k,l)=>'<label><input type="checkbox" '+(cv[k]?'checked':'')+' onchange="cvT(\''+k+'\',this.checked)">'+l+'</label>';
- return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4" stroke-dasharray="5 4"/></svg><b>PLAN</b> (garis putus-putus)')+ck('a','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4"/></svg><b>ACTUAL</b> (garis penuh)')+ck('k','Aktivitas')+ck('n','Keterangan (callout)')+'<button type="button" class="b alt sm" onclick="coMode()" style="margin-left:8px">＋ Callout</button></div><div class="mute" style="font-size:12px;margin-top:4px">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Warna = fase (oranye Ramp Down, biru Ramp Up); putus-putus = Plan, penuh = Actual. Klik titik atau aktivitas yang ada untuk mengubah keterangannya. Kotak keterangan bisa digeser (klik 2x untuk reset).</div>';}
+ return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4" stroke-dasharray="5 4"/></svg><b>PLAN</b> (garis putus-putus)')+ck('a','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4"/></svg><b>ACTUAL</b> (garis penuh)')+ck('k','Aktivitas')+ck('n','Keterangan (callout)')+ck('v','Callout angka power tiap titik')+'<button type="button" class="b alt sm" onclick="coMode()" style="margin-left:8px">＋ Callout</button></div><div class="mute" style="font-size:12px;margin-top:4px">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Warna = fase (oranye Ramp Down, biru Ramp Up); putus-putus = Plan, penuh = Actual. Klik titik atau aktivitas yang ada untuk mengubah keterangannya. Kotak keterangan bisa digeser (klik 2x untuk reset).</div>';}
 function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const tip=box.querySelector('.tip'),xh=svg.querySelector('.xh'),dot=svg.querySelector('.cdot');svg.style.cursor='crosshair';
  const hide=()=>{tip.style.display='none';xh.style.display='none';dot.style.display='none';};
- svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*340;let b=null,bd=1e9;
+ svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*(S.cm?S.cm.H:364);let b=null,bd=1e9;
   S.pts.forEach(p=>{const d=Math.abs(p.x-sx)+Math.abs(p.y-sy)*.6;if(d<bd){bd=d;b=p;}});if(!b||bd>55)return hide();
   xh.setAttribute('x1',b.x);xh.setAttribute('x2',b.x);xh.style.display='';dot.setAttribute('cx',b.x);dot.setAttribute('cy',b.y);dot.style.display='';
   tip.innerHTML=b.t;tip.style.display='block';tip.style.left=Math.max(0,Math.min(e.clientX-r.left+12,r.width-220))+'px';tip.style.top=(e.clientY-r.top+14)+'px';};
@@ -1062,7 +1072,7 @@ function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const 
    const up=()=>{document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);if(moved){S.noClick=1;setTimeout(()=>S.noClick=0,80);saveCo();}};
    document.addEventListener('pointermove',mv);document.addEventListener('pointerup',up);};
   g.ondblclick=e=>{e.stopPropagation();delete S.coff[id];saveCo();redrawCharts();};g.onclick=e=>{e.stopPropagation();if(S.noClick)return;if(String(id).startsWith('CO-')){const c=coList().find(x=>x.id===id);if(c)coDlg(c);}};});
- svg.onclick=e=>{if(S.noClick)return;const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*340,m=S.cm;if(!m)return;
+ svg.onclick=e=>{if(S.noClick)return;const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*(S.cm?S.cm.H:364),m=S.cm;if(!m)return;
   if(sx<m.L||sx>m.W-m.Rr||sy<m.T||sy>m.H-m.B)return;
   if(S.coMode){S.coMode=0;svg.style.cursor='crosshair';coDlg({t:m.t0+(sx-m.L)/(m.W-m.L-m.Rr)*(m.t1-m.t0),v:Math.max(0,(1-(sy-m.T)/(m.H-m.T-m.B))*m.ym)});return;}
   let b=null,bd=1e9;S.pts.forEach(p=>{if(!p.id)return;const d=Math.hypot(p.x-sx,p.y-sy);if(d<bd){bd=d;b=p;}});
