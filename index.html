@@ -75,7 +75,7 @@ tr.sel td{background:color-mix(in srgb,var(--warn) 30%,transparent)}.ph-RD{borde
 .empty{padding:26px;text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:8px}
 .pv{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}.pv table{min-width:0}.pv td,.pv th{padding:3px 7px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}.pv .hr td{background:color-mix(in srgb,var(--ru) 20%,transparent);font-weight:600}
 .ib{background:transparent;border:1px solid var(--line);color:var(--tx);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;padding:0;transition:all .12s}.ib:hover{border-color:var(--tx);background:var(--soft)}.ib.bad:hover{border-color:var(--bad);color:var(--bad)}
-.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.clamp.long{cursor:zoom-in}.clamp.long.open{-webkit-line-clamp:unset;display:block;cursor:zoom-out}.lh{font-size:11px;margin-top:1px}.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .ck{width:30px;text-align:center}.ck input{width:auto;min-width:0;accent-color:var(--ru)}
 .hgrid{display:flex;gap:2px;user-select:none;touch-action:none}.hb{display:block;width:20px;height:24px;border:1px solid var(--line);border-radius:3px;background:var(--soft);cursor:crosshair;transition:background .08s}.hb:hover{border-color:var(--ru)}.hb.on{background:var(--ru);border-color:var(--ru)}.hb.pre{background:color-mix(in srgb,var(--warn) 70%,transparent);border-color:var(--warn)}
 .hlab{display:flex;gap:2px;font-size:10px;color:var(--mute);font-weight:400;margin-top:2px}.hlab span{width:20px;text-align:center}
@@ -857,7 +857,7 @@ function drawMt(){
  (L.map(t=>{const a=+D(t.planned_start),b=+D(t.planned_finish);
   const sv=scOf(t),pv=picsOf(t),rb=pv.length?(pv.length===1?hc(hp(pv[0]),.22):'linear-gradient(90deg,'+pv.map(p=>hc(hp(p),.28)).join(',')+')'):sv?hc(hs(SL,sv,0),.18):'',st=(rb?'background:'+rb+';':'')+(t.archived==='Y'?'opacity:.55;':'');
   return '<tr data-id="'+t.task_id+'"'+(st?' style="'+st+'"':'')+'><td class="ck" style="box-shadow:inset 7px 0 0 '+(sv?hc(hs(SL,sv,0),1):'transparent')+'"><input type="checkbox" class="rk"'+(S.sel.has(t.task_id)?' checked':'')+'></td>'+
-  '<td style="min-width:240px;max-width:420px"><div class="clamp" title="'+esc(t.description)+'">'+esc(t.description)+'</div>'+(t.remark?'<div class="mute" style="font-size:12px">'+esc(t.remark)+'</div>':'')+'<div>'+fs.filter(f=>t.custom&&t.custom[f.field_id]).slice(0,4).map(f=>'<span class="tag"'+(scF&&f.field_id===scF.field_id?' style="background:'+hc(hs(SL,sv,0),.3)+';border-color:'+hc(hs(SL,sv,0),1)+'"':'')+'>'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('')+'</div></td>'+
+  '<td style="min-width:240px;max-width:420px">'+(()=>{const lg=t.description.split('\n').length>3||t.description.length>220;return '<div class="clamp'+(lg?' long':'')+'" title="'+esc(t.description)+'">'+esc(t.description)+'</div>'+(lg?'<div class="lh mute">▾ klik teks untuk lihat selengkapnya</div>':'');})()+(t.remark?'<div class="mute" style="font-size:12px;white-space:pre-line">'+esc(t.remark)+'</div>':'')+'<div>'+fs.filter(f=>t.custom&&t.custom[f.field_id]).slice(0,4).map(f=>'<span class="tag"'+(scF&&f.field_id===scF.field_id?' style="background:'+hc(hs(SL,sv,0),.3)+';border-color:'+hc(hs(SL,sv,0),1)+'"':'')+'>'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('')+'</div></td>'+
   '<td>'+pv.map(p=>chip(hp(p),p)).join('')+'</td><td style="white-space:nowrap;font-size:12px">'+(t.planned_start?esc(String(t.planned_start).slice(5))+'<br>→ '+esc(String(t.planned_finish||'').slice(5)):'<span class="mute">–</span>')+'</td>'+
   '<td><div class="hgrid">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00');return '<i class="hb'+(a<s0+36e5&&b>s0?' on':'')+'" data-h="'+x+'" title="'+z(x)+':00"></i>';}).join('')+'</div></td>'+
   '<td style="min-width:160px"><div class="bar"><i style="width:'+t.progress+'%"></i></div><div class="row" style="margin:4px 0 0"><input type="range" min="0" max="100" step="5" value="'+t.progress+'" data-id="'+t.task_id+'"><b class="pv2">'+t.progress+'%</b></div></td>'+
@@ -895,13 +895,13 @@ async function archiveT(id){try{await ensurePw('task_edit');}catch(e){return;}co
 async function editTask(t){
  try{await ensurePw('task_edit');}catch(e){return;}
  const fs=pfields(),c=t?t.custom:{};
- modal(t?'Edit task':'Task baru',inp('tx_d','Work Description',t?t.description:'')+inp('tx_ps','Planned Start',t?toI(t.planned_start):gridDay()+'T08:00','datetime-local')+inp('tx_pf','Planned Finish',t?toI(t.planned_finish):gridDay()+'T09:00','datetime-local')+
+ modal(t?'Edit task':'Task baru',fld('','Work Description <span class="mute" style="font-weight:400">(Enter = baris baru)</span>','<textarea id="tx_d" rows="6" style="width:100%;resize:vertical;line-height:1.5">'+esc(t?t.description:'')+'</textarea>')+inp('tx_ps','Planned Start',t?toI(t.planned_start):gridDay()+'T08:00','datetime-local')+inp('tx_pf','Planned Finish',t?toI(t.planned_finish):gridDay()+'T09:00','datetime-local')+
  fld('','PIC','<input id="tx_pic" list="ppl" placeholder="Beberapa PIC pisahkan koma, mis. Mas, M" value="'+esc(t?t.pic:'')+'"><datalist id="ppl">'+[...new Set(S.people.flatMap(p=>String(p).split(/[,;]/).map(x=>x.trim()).filter(Boolean)))].map(p=>'<option value="'+esc(p)+'">').join('')+'</datalist>')+
  inp('tx_pr','Progress (%)',t?t.progress:0,'number')+
  fs.map(f=>f.field_type==='list'?sel('cf_'+f.field_id,f.field_name,[''].concat(f.options.split(',')),c[f.field_id]||''):inp('cf_'+f.field_id,f.field_name,c[f.field_id]||'',f.field_type==='number'?'number':'text')).join('')+
- fld('','Remark (opsional)','<textarea id="tx_r" rows="2"></textarea>'),
+ fld('','Remark (opsional)','<textarea id="tx_r" rows="2" style="width:100%;resize:vertical">'+esc(t?t.remark:'')+'</textarea>'),
  async()=>{const custom={};fs.forEach(f=>custom[f.field_id]=gv('cf_'+f.field_id));
-  await call('saveTask',{task:{task_id:t&&t.task_id,shutdown_id:S.sid,description:gv('tx_d'),planned_start:toS(gv('tx_ps')),planned_finish:toS(gv('tx_pf')),pic:gv('tx_pic'),progress:gv('tx_pr'),remark:gv('tx_r')||(t?t.remark:''),custom}});toast('Tersimpan');rerender();});}
+  await call('saveTask',{task:{task_id:t&&t.task_id,shutdown_id:S.sid,description:gv('tx_d'),planned_start:toS(gv('tx_ps')),planned_finish:toS(gv('tx_pf')),pic:gv('tx_pic'),progress:gv('tx_pr'),remark:gv('tx_r'),custom}});toast('Tersimpan');rerender();});}
 async function history(id){await run(async()=>{const L=await call('taskLog',{task_id:id});
  modal('Riwayat perubahan','<div class="tw"><table><tr><th>Waktu (server)</th><th>User</th><th>Field</th><th>Lama</th><th>Baru</th></tr>'+L.map(l=>'<tr><td>'+esc(l.timestamp)+'</td><td>'+esc(l.updated_by)+'</td><td>'+esc(l.field_name)+'</td><td>'+esc(l.old_value)+'</td><td>'+esc(l.new_value)+'</td></tr>').join('')+'</table></div>');});}
 
@@ -1281,7 +1281,7 @@ function mapRows(){const A=W.aoa,rows=[];let badDate=0;
  const by=r=>W.cols.filter(c=>c.role===r);
  for(let r=W.ds;r<A.length;r++){const row=A[r],g=c=>clean(row[c.i]);
   if(W.kind==='task'){const o={custom:{}};
-   W.cols.forEach(c=>{const v=W.cols[c.i].role==='description'?String(row[c.i]==null?'':row[c.i]).trim():g(c);if(!v)return;
+   W.cols.forEach(c=>{const v=(W.cols[c.i].role==='description'||W.cols[c.i].role==='remark')?String(row[c.i]==null?'':row[c.i]).replace(/\r/g,'').trim():g(c);if(!v)return;
     if(c.role==='description')o.description=v;else if(c.role==='planned_start'||c.role==='planned_finish'){const d=pDT(v);if(d)o[c.role]=d;else badDate++;}
     else if(c.role==='progress')o.progress=pPct(v);else if(c.role==='custom'){if(c.fname)o.custom[c.fname]=v;}else if(c.role!=='ignore')o[c.role]=v;});
    if(!o.description)continue;rows.push(o);}
@@ -1344,5 +1344,6 @@ function countUp(){const els=[...document.querySelectorAll('.kpi b')],sg=els.map
 document.addEventListener('keydown',e=>{const a=document.activeElement;if(e.ctrlKey||e.metaKey||e.altKey||(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))||$('ov').style.display==='flex')return;
  if(e.key==='/'){e.preventDefault();show('mt');setTimeout(()=>{const q=$('mq');if(q)q.focus();},60);}else if(/^[1-7]$/.test(e.key)){const b=document.querySelectorAll('#nav button')[+e.key-1];if(b)b.click();}});
 document.querySelector('header h1').insertAdjacentHTML('afterbegin','<i id="net" class="'+(window.fbOnline?'on':'')+'" title="Menyambung…"></i>');$('xl').title='Export Excel + backup lengkap (bisa di-Import kembali lewat Admin)';
+document.addEventListener('click',e=>{const c=e.target.closest&&e.target.closest('#mtab .clamp.long');if(!c)return;c.classList.toggle('open');const h=c.nextElementSibling;if(h&&h.classList.contains('lh'))h.textContent=c.classList.contains('open')?'▴ tutup':'▾ klik teks untuk lihat selengkapnya';});
 run(boot);
 </script></body></html>
