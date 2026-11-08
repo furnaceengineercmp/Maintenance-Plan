@@ -704,7 +704,8 @@ const TABS=[['ov','Overview'],['mt','Maintenance'],['pw','Power'],['tl','Timelin
 const ACTS=['Open Skimming','Close Skimming','Open Tapping','Close Tapping','Kiln Start Feeding','Kiln Stop Feeding','Other'];
 const PHASES=['Ramp Down','Ramp Up'],PHASES2=[['Ramp Down','ph-RD'],['Ramp Up','ph-RU']];
 let S={g:{day:'',from:8,to:16},sel:new Set(),by:'',pw:'',perms:{},cfg:{},projects:[],templates:[],localFields:[],people:[],sid:'',tab:'ov',tasks:[],power:{schedule:[],intervals:[],activities:[]},notifs:[],seen:{},dirty:{},cv:{p:1,a:1,k:1,n:1},pts:[],showArch:false};
-let MF={q:'',st:'',dl:'',ff:{}};
+let MF={q:'',st:'',dl:'',pic:'',ff:{}};
+const picsOf=t=>{const seen=new Set();return String(t.pic||'').split(/[,;]/).map(x=>x.trim()).filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()));};
 
 /* ---- tema terang / gelap ---- */
 function applyTheme(t){document.documentElement.dataset.theme=t;$('th').textContent=t==='dark'?'☀ Terang':'🌙 Gelap';lsSet('fsm_theme',t);}
@@ -822,7 +823,7 @@ function renderMt(){
   el.innerHTML='<div class="card"><div class="tb"><input id="mq" placeholder="🔍 Cari deskripsi, PIC, atau field…" style="flex:1;min-width:200px"><button class="b alt" id="mimp">⬆ Import Excel</button><button class="b" id="madd">+ Task</button></div><div class="chips" id="mchips"></div><div class="tb fgrp" id="mfil"></div><div class="sel-bar" id="msel"></div><div class="tw" id="mtab"></div></div>';
   $('mq').oninput=()=>{MF.q=gv('mq').toLowerCase();drawMt();};$('madd').onclick=()=>editTask();$('mimp').onclick=()=>openImport('task');
   $('mchips').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const k=b.dataset.k;MF.st=['Not Started','Ongoing','Completed'].includes(k)?k:'';MF.dl=['Overdue','Approaching'].includes(k)?k:'';drawMt();};
-  $('mfil').onchange=e=>{const t=e.target;if(t.dataset.ff!==undefined)MF.ff[t.dataset.ff]=t.value;else if(t.id==='gd')S.g.day=t.value||S.g.day;else if(t.id==='gf')S.g.from=Math.min(+t.value,S.g.to);else if(t.id==='gt')S.g.to=Math.max(+t.value,S.g.from);drawMt();};
+  $('mfil').onchange=e=>{const t=e.target;if(t.dataset.ff!==undefined)MF.ff[t.dataset.ff]=t.value;else if(t.dataset.pic!==undefined)MF.pic=t.value;else if(t.id==='gd')S.g.day=t.value||S.g.day;else if(t.id==='gf')S.g.from=Math.min(+t.value,S.g.to);else if(t.id==='gt')S.g.to=Math.max(+t.value,S.g.from);drawMt();};
   $('mfil').onclick=e=>{if(e.target.id==='march'){S.showArch=!S.showArch;drawMt();}}; // arsip disaring di browser: instan
   $('msel').onclick=e=>{if(e.target.closest('[data-bulk]'))bulkDelT();if(e.target.closest('[data-clr]')){S.sel.clear();drawMt();}};
   const mt=$('mtab');
@@ -838,25 +839,26 @@ function updSel(){const n=S.sel.size;$('msel').innerHTML=n?'<b>'+n+'</b> dipilih
  const all=$('mtab').querySelector('.ckall'),rows=[...$('mtab').querySelectorAll('.rk')];if(all)all.checked=rows.length>0&&rows.every(r=>r.checked);}
 function drawMt(){
  const base=S.tasks.filter(t=>S.showArch||t.archived!=='Y'),fs=pfields(),day=gridDay(),G=S.g,ffs=fs.filter(f=>FFN.test(f.field_name));
- const match=t=>(!MF.q||(t.description+' '+t.pic+' '+Object.values(t.custom||{}).join(' ')).toLowerCase().includes(MF.q))&&ffs.every(f=>!MF.ff[f.field_id]||(t.custom||{})[f.field_id]===MF.ff[f.field_id]);
+ const pm=new Map();base.forEach(t=>picsOf(t).forEach(p=>{if(!pm.has(p.toLowerCase()))pm.set(p.toLowerCase(),p);}));const PLs=[...pm.values()].sort((a,b)=>a.localeCompare(b));if(MF.pic&&!PLs.some(p=>p.toLowerCase()===MF.pic.toLowerCase()))MF.pic='';
+ const match=t=>(!MF.q||(t.description+' '+t.pic+' '+Object.values(t.custom||{}).join(' ')).toLowerCase().includes(MF.q))&&ffs.every(f=>!MF.ff[f.field_id]||(t.custom||{})[f.field_id]===MF.ff[f.field_id])&&(!MF.pic||picsOf(t).some(p=>p.toLowerCase()===MF.pic.toLowerCase()));
  const cnt=f=>base.filter(t=>match(t)&&f(t)).length;
  const CH=[['all','Semua',()=>true],['Not Started','Not Started',t=>t.status==='Not Started'],['Ongoing','Ongoing',t=>t.status==='Ongoing'],['Completed','Completed',t=>t.status==='Completed'],['Overdue','Overdue',t=>t.deadline==='Overdue'],['Approaching','Approaching',t=>t.deadline==='Approaching']];
  $('mchips').innerHTML=CH.map(c=>'<button class="chip'+((c[0]==='all'&&!MF.st&&!MF.dl)||c[0]===MF.st||c[0]===MF.dl?' on':'')+'" data-k="'+c[0]+'">'+c[1]+'<b>'+cnt(c[2])+'</b></button>').join('');
- const na=S.tasks.filter(t=>t.archived==='Y').length;
- $('mfil').innerHTML=ffs.map(f=>{const vals=[...new Set(base.map(t=>(t.custom||{})[f.field_id]).filter(Boolean))].sort();return '<label>'+esc(f.field_name)+' <select data-ff="'+f.field_id+'"><option value="">Semua</option>'+vals.map(v=>'<option'+(MF.ff[f.field_id]===v?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>';}).join('')+
+ const na=S.tasks.filter(t=>t.archived==='Y').length,picSel=PLs.length?'<label>PIC <select data-pic="1"><option value="">Semua</option>'+PLs.map(v=>'<option'+(MF.pic.toLowerCase()===v.toLowerCase()?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>':'';
+ $('mfil').innerHTML=ffs.map(f=>{const vals=[...new Set(base.map(t=>(t.custom||{})[f.field_id]).filter(Boolean))].sort();return '<label>'+esc(f.field_name)+' <select data-ff="'+f.field_id+'"><option value="">Semua</option>'+vals.map(v=>'<option'+(MF.ff[f.field_id]===v?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>';}).join('')+picSel+
   '<span style="flex:1"></span><label>Grid jam · tanggal <input type="date" id="gd" value="'+day+'"></label><label>dari <select id="gf">'+hopts(G.from)+'</select></label><label>sampai <select id="gt">'+hopts(G.to)+'</select></label><button class="b alt sm" id="march">'+(S.showArch?'Sembunyikan arsip':'Tampilkan arsip ('+na+')')+'</button>';
  const L=base.filter(t=>match(t)&&(!MF.st||t.status===MF.st)&&(!MF.dl||t.deadline===MF.dl)).sort((a,b)=>(a.planned_finish||'~')<(b.planned_finish||'~')?-1:1);
  const hrs=[];for(let x=G.from;x<=G.to;x++)hrs.push(x);
  const scF=fs.find(f=>/^scope$/i.test(f.field_name)),scOf=t=>scF?((t.custom||{})[scF.field_id]||''):'',PAL=[210,28,145,285,340,48,175,0,235,90],hc=(h,a)=>'hsla('+h+',72%,52%,'+a+')',
-  uni=g=>[...new Set(base.map(g).filter(Boolean))].sort(),SL=uni(scOf),PL=uni(t=>t.pic),hs=(Lx,v,o)=>PAL[(Lx.indexOf(v)+o)%PAL.length],
+  uni=g=>[...new Set(base.map(g).filter(Boolean))].sort(),SL=uni(scOf),PL=PLs,hs=(Lx,v,o)=>PAL[(Lx.indexOf(v)+o)%PAL.length],hp=p=>PAL[(PL.findIndex(x=>x.toLowerCase()===p.toLowerCase())+5)%PAL.length],
   chip=(h,v)=>'<span class="pc" style="background:'+hc(h,.28)+';border:1px solid '+hc(h,1)+'">'+esc(v)+'</span>',
   leg='<div class="mleg">'+(SL.length?'<b>Scope (garis kiri):</b>'+SL.map(v=>chip(hs(SL,v,0),v)).join(''):'')+(PL.length?'<b style="margin-left:12px">PIC (warna baris):</b>'+PL.map(v=>chip(hs(PL,v,5),v)).join(''):'')+'</div>';
  $('mtab').innerHTML=leg+'<table><tr><th class="ck"><input type="checkbox" class="ckall" title="Pilih semua"></th><th>Pekerjaan</th><th>PIC</th><th>Jadwal</th><th><div>Jam · '+esc(day)+'</div><div class="hlab">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th><th>Progress</th><th>Status</th><th>Aksi</th></tr>'+
  (L.map(t=>{const a=+D(t.planned_start),b=+D(t.planned_finish);
-  const sv=scOf(t),pv=t.pic,rb=pv?hc(hs(PL,pv,5),.22):sv?hc(hs(SL,sv,0),.18):'',st=(rb?'background:'+rb+';':'')+(t.archived==='Y'?'opacity:.55;':'');
+  const sv=scOf(t),pv=picsOf(t),rb=pv.length?(pv.length===1?hc(hp(pv[0]),.22):'linear-gradient(90deg,'+pv.map(p=>hc(hp(p),.28)).join(',')+')'):sv?hc(hs(SL,sv,0),.18):'',st=(rb?'background:'+rb+';':'')+(t.archived==='Y'?'opacity:.55;':'');
   return '<tr data-id="'+t.task_id+'"'+(st?' style="'+st+'"':'')+'><td class="ck" style="box-shadow:inset 7px 0 0 '+(sv?hc(hs(SL,sv,0),1):'transparent')+'"><input type="checkbox" class="rk"'+(S.sel.has(t.task_id)?' checked':'')+'></td>'+
   '<td style="min-width:240px;max-width:420px"><div class="clamp" title="'+esc(t.description)+'">'+esc(t.description)+'</div>'+(t.remark?'<div class="mute" style="font-size:12px">'+esc(t.remark)+'</div>':'')+'<div>'+fs.filter(f=>t.custom&&t.custom[f.field_id]).slice(0,4).map(f=>'<span class="tag"'+(scF&&f.field_id===scF.field_id?' style="background:'+hc(hs(SL,sv,0),.3)+';border-color:'+hc(hs(SL,sv,0),1)+'"':'')+'>'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('')+'</div></td>'+
-  '<td>'+(pv?chip(hs(PL,pv,5),pv):'')+'</td><td style="white-space:nowrap;font-size:12px">'+(t.planned_start?esc(String(t.planned_start).slice(5))+'<br>→ '+esc(String(t.planned_finish||'').slice(5)):'<span class="mute">–</span>')+'</td>'+
+  '<td>'+pv.map(p=>chip(hp(p),p)).join('')+'</td><td style="white-space:nowrap;font-size:12px">'+(t.planned_start?esc(String(t.planned_start).slice(5))+'<br>→ '+esc(String(t.planned_finish||'').slice(5)):'<span class="mute">–</span>')+'</td>'+
   '<td><div class="hgrid">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00');return '<i class="hb'+(a<s0+36e5&&b>s0?' on':'')+'" data-h="'+x+'" title="'+z(x)+':00"></i>';}).join('')+'</div></td>'+
   '<td style="min-width:160px"><div class="bar"><i style="width:'+t.progress+'%"></i></div><div class="row" style="margin:4px 0 0"><input type="range" min="0" max="100" step="5" value="'+t.progress+'" data-id="'+t.task_id+'"><b class="pv2">'+t.progress+'%</b></div></td>'+
   '<td>'+bdg(t.status)+(t.delayed_start?' '+bdg('Delayed'):'')+'<div style="margin-top:3px">'+bdg(t.deadline)+'</div></td>'+
@@ -894,7 +896,7 @@ async function editTask(t){
  try{await ensurePw('task_edit');}catch(e){return;}
  const fs=pfields(),c=t?t.custom:{};
  modal(t?'Edit task':'Task baru',inp('tx_d','Work Description',t?t.description:'')+inp('tx_ps','Planned Start',t?toI(t.planned_start):gridDay()+'T08:00','datetime-local')+inp('tx_pf','Planned Finish',t?toI(t.planned_finish):gridDay()+'T09:00','datetime-local')+
- fld('','PIC','<input id="tx_pic" list="ppl" value="'+esc(t?t.pic:'')+'"><datalist id="ppl">'+S.people.map(p=>'<option value="'+esc(p)+'">').join('')+'</datalist>')+
+ fld('','PIC','<input id="tx_pic" list="ppl" placeholder="Beberapa PIC pisahkan koma, mis. Mas, M" value="'+esc(t?t.pic:'')+'"><datalist id="ppl">'+[...new Set(S.people.flatMap(p=>String(p).split(/[,;]/).map(x=>x.trim()).filter(Boolean)))].map(p=>'<option value="'+esc(p)+'">').join('')+'</datalist>')+
  inp('tx_pr','Progress (%)',t?t.progress:0,'number')+
  fs.map(f=>f.field_type==='list'?sel('cf_'+f.field_id,f.field_name,[''].concat(f.options.split(',')),c[f.field_id]||''):inp('cf_'+f.field_id,f.field_name,c[f.field_id]||'',f.field_type==='number'?'number':'text')).join('')+
  fld('','Remark (opsional)','<textarea id="tx_r" rows="2"></textarea>'),
@@ -1161,7 +1163,7 @@ function bars(title,rows,max,unit){return '<div class="card"><h2>'+title+'</h2>'
 function renderAn(){
  const T=liveTasks(),g=fn=>{const m={};T.forEach(t=>{const k=fn(t);(m[k]=m[k]||[]).push(t);});return m;};
  const cnt=fn=>Object.entries(g(fn)).map(([k,v])=>[k,v.length]),avg=fn=>Object.entries(g(fn)).map(([k,v])=>[k,v.reduce((a,t)=>a+Number(t.progress),0)/v.length]);
- let h=bars('Task per status',cnt(t=>t.status),T.length)+bars('Task per deadline',cnt(t=>t.deadline),T.length)+bars('Rata-rata progress per PIC',avg(t=>t.pic),100,'%');
+ let h=bars('Task per status',cnt(t=>t.status),T.length)+bars('Task per deadline',cnt(t=>t.deadline),T.length)+bars('Rata-rata progress per PIC',(()=>{const m={};T.forEach(t=>{const l=picsOf(t);(l.length?l:['']).forEach(k=>{(m[k]=m[k]||[]).push(t);});});return Object.entries(m).map(([k,v])=>[k,v.reduce((a,t)=>a+Number(t.progress),0)/v.length]);})(),100,'%');
  pfields().forEach(f=>{h+=bars('Progress per '+f.field_name,avg(t=>(t.custom||{})[f.field_id]||''),100,'%');});
  const rd=calcTotals('Ramp Down'),ru=calcTotals('Ramp Up'),m=Math.max(rd.p,rd.a,ru.p,ru.a,1);
  h+=bars('Calcine (ton): plan vs actual',[['Ramp Down plan',rd.p],['Ramp Down actual',rd.a],['Ramp Up plan',ru.p],['Ramp Up actual',ru.a]],m);
