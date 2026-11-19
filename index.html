@@ -112,6 +112,25 @@ input[type=range]{accent-color:var(--rd);cursor:pointer}
 .chip{transition:transform .12s}.chip:hover{transform:translateY(-1px)}
 .hb{transition:background .12s,transform .12s}.hb:hover{transform:scale(1.18)}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}::-webkit-scrollbar-thumb:hover{background:var(--mute)}
+
+#pr{display:none}
+@media print{@page{size:A4 landscape;margin:9mm}
+ html,body{background:#fff!important}body>*:not(#pr){display:none!important}
+ #pr{display:block!important;--bg:#fff;--card:#fff;--tx:#18202b;--mute:#5b6675;--line:#cfd6df;--soft:#f4f6f9;--rd:#e8590c;--ru:#1c7ed6;--ok:#2b9348;--warn:#e67700;--bad:#d62839;--idle:#8a94a0;color:#18202b;font:11px/1.4 system-ui,'Segoe UI',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ #pr .rh{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #e8590c;padding-bottom:6px;margin-bottom:10px}
+ #pr h1{margin:0;font-size:20px}#pr h3{margin:14px 0 6px;font-size:13px;break-after:avoid}#pr .rs{color:#5b6675;font-size:11px}#pr .rl{font-weight:700;color:#e8590c;font-size:12px}
+ #pr .sum{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 8px;font-size:11px;align-items:center}#pr .sum b{font-size:12px}
+ #pr table{width:100%;border-collapse:collapse;font-size:10px;min-width:0}#pr th{background:#eef1f5;text-align:left;padding:3px 5px;border:1px solid #cfd6df;color:#18202b}
+ #pr td{padding:3px 5px;border:1px solid #dde2e8;vertical-align:top;color:#18202b}#pr thead{display:table-header-group}#pr tr{break-inside:avoid}#pr .nw{white-space:nowrap}#pr .mu{color:#5b6675}
+ #pr .ds{white-space:pre-line;font-weight:600}#pr .rm{white-space:pre-line;color:#5b6675;font-size:9.5px}#pr .tg{display:inline-block;border:1px solid #cfd6df;border-radius:4px;padding:0 5px;margin:2px 3px 0 0;font-size:9px;background:#fff}
+ #pr .hg{display:flex;gap:1px}#pr .hg i{display:block;width:11px;height:14px;border:1px solid #c5ccd6;background:#fff}#pr .hg i.on{background:#1c7ed6;border-color:#1c7ed6}
+ #pr .hl{display:flex;gap:1px;font-size:7px;font-weight:400;margin-top:2px}#pr .hl span{width:12px;text-align:center}
+ #pr .pbar{height:6px;background:#e5e9ee;border-radius:4px;overflow:hidden;margin-bottom:2px;min-width:70px}#pr .pbar i{display:block;height:100%;background:#e8590c}
+ #pr .chb{margin:0 0 8px;break-inside:avoid}#pr .chb svg{width:100%;height:auto;max-height:100mm}#pr .nt{border:1px solid #cfd6df;border-radius:8px;padding:8px 10px;line-height:1.5;break-inside:avoid}
+ #pr .tw{overflow:visible}#pr .card{box-shadow:none;break-inside:avoid;margin-bottom:8px}#pr .pc{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;font-size:9.5px;margin:1px 3px 1px 0}
+}
+.mpi{width:76px;text-align:center;font-weight:700}.hb.mpn{font-style:normal;font-size:10px;font-weight:700;line-height:20px;text-align:center;color:var(--tx);background:transparent;border-color:transparent}.mpc{background:rgba(43,147,72,.22);border:1px solid #2b9348}tr.mpf td{background:var(--soft);border-top:2px solid var(--line)}#pr .mpl span{font-size:8px;font-weight:700;color:#18202b}
+#pdfab{position:fixed;right:20px;bottom:20px;z-index:40;border-radius:999px;padding:11px 18px;font-weight:700;background:var(--rd);color:#fff;border:0;box-shadow:0 8px 22px rgba(0,0,0,.35)}body[data-tab=ad] #pdfab{display:none}@media(max-width:700px){#pdfab{right:12px;bottom:12px;padding:10px 14px}}
 </style></head><body>
 <div id="ld"></div>
 <div id="top"><header><h1>Furnace Shutdown Management<small>Maintenance · Power Ramp Down / Ramp Up</small></h1>
@@ -768,7 +787,7 @@ async function boot(){
 function fillProj(){lastSig=psig(S.projects);const sel=$('proj');sel.innerHTML=S.projects.map(p=>'<option value="'+p.shutdown_id+'">'+esc(pn(p.name))+(p.status!=='Active'?' ('+p.status+')':'')+'</option>').join('')||'<option value="">(belum ada project)</option>';
  if(!S.sid||!S.projects.find(p=>p.shutdown_id===S.sid))S.sid=latestProj();sel.value=S.sid;refresh();}
 const R={ov:()=>renderOv(),mt:()=>renderMt(),pw:()=>renderPw(),an:()=>renderAn(),nt:()=>renderNt(),ad:()=>renderAd()};
-function show(t){S.revealed=0;S.cuSig='';S.tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));
+function show(t){S.revealed=0;S.cuSig='';document.body.dataset.tab=t;S.tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));
  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
  if(t==='tl')loadTl();else paint(t);}
 function paint(t){if(S.dirty[t]&&R[t]){S.dirty[t]=0;R[t]();redrawCharts();if(t==='ov')countUp();}}
@@ -853,17 +872,21 @@ function drawMt(){
  const scF=fs.find(f=>/^scope$/i.test(f.field_name)),scOf=t=>scF?((t.custom||{})[scF.field_id]||''):'',PAL=[210,28,145,285,340,48,175,0,235,90],hc=(h,a)=>'hsla('+h+',72%,52%,'+a+')',
   uni=g=>[...new Set(base.map(g).filter(Boolean))].sort(),SL=uni(scOf),PL=PLs,hs=(Lx,v,o)=>PAL[(Lx.indexOf(v)+o)%PAL.length],hp=p=>PAL[(PL.findIndex(x=>x.toLowerCase()===p.toLowerCase())+5)%PAL.length],
   chip=(h,v)=>'<span class="pc" style="background:'+hc(h,.28)+';border:1px solid '+hc(h,1)+'">'+esc(v)+'</span>',
-  leg='<div class="mleg">'+(SL.length?'<b>Scope (garis kiri):</b>'+SL.map(v=>chip(hs(SL,v,0),v)).join(''):'')+(PL.length?'<b style="margin-left:12px">PIC (warna baris):</b>'+PL.map(v=>chip(hs(PL,v,5),v)).join(''):'')+'</div>';
- $('mtab').innerHTML=leg+'<table><tr><th class="ck"><input type="checkbox" class="ckall" title="Pilih semua"></th><th>Pekerjaan</th><th>PIC</th><th>Jadwal</th><th><div>Jam · '+esc(day)+'</div><div class="hlab">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th><th>Progress</th><th>Status</th><th>Aksi</th></tr>'+
+  legB='<div class="mleg">'+(SL.length?'<b>Scope (garis kiri):</b>'+SL.map(v=>chip(hs(SL,v,0),v)).join(''):'')+(PL.length?'<b style="margin-left:12px">PIC (warna baris):</b>'+PL.map(v=>chip(hs(PL,v,5),v)).join(''):'')+'</div>';
+ const nfs=fs.filter(f=>f.field_type==='number'),mpF=nfs.find(f=>/man\s*power|manpower/i.test(f.field_name))||nfs[0],mpv=(t,f)=>Number((t.custom||{})[f.field_id])||0,
+  mpTot=nfs.length&&L.length?'<div class="mleg">👷 '+nfs.map(f=>'<b>Total '+esc(f.field_name)+' (task terfilter):</b><span class="pc mpc">'+f2(L.reduce((a,t)=>a+mpv(t,f),0))+'</span>').join(' ')+'</div>':'',
+  mpFoot=(mpF&&L.length)?'<tr class="mpf"><td colspan="'+(4+nfs.length)+'" style="text-align:right"><b>👷 Total '+esc(mpF.field_name)+' per jam</b> · '+esc(dPart(day))+'</td><td><div class="hgrid">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00'),sm=L.reduce((a,t)=>(+D(t.planned_start)<s0+36e5&&+D(t.planned_finish)>s0)?a+mpv(t,mpF):a,0);return '<i class="hb mpn" title="'+z(x)+':00 · '+f2(sm)+'">'+(sm?f2(sm):'')+'</i>';}).join('')+'</div></td><td colspan="3"></td></tr>':'';
+ S.mtv={L,hrs,day,scOf,SL,PL,hs,hp,hc,fs,chip,nfs,mpF,mpv};
+ $('mtab').innerHTML='<div class="mleg"><button type="button" class="b alt sm" id="legt">🎨 '+(S.leg?'Sembunyikan':'Tampilkan')+' legenda warna</button></div>'+(S.leg?legB:'')+mpTot+'<table><tr><th class="ck"><input type="checkbox" class="ckall" title="Pilih semua"></th><th>Pekerjaan</th><th>PIC</th>'+nfs.map(f=>'<th>'+esc(f.field_name)+'</th>').join('')+'<th>Jadwal</th><th><div>Jam · '+esc(day)+'</div><div class="hlab">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th><th>Progress</th><th>Status</th><th>Aksi</th></tr>'+
  (L.map(t=>{const a=+D(t.planned_start),b=+D(t.planned_finish);
   const sv=scOf(t),pv=picsOf(t),rb=pv.length?(pv.length===1?hc(hp(pv[0]),.22):'linear-gradient(90deg,'+pv.map(p=>hc(hp(p),.28)).join(',')+')'):sv?hc(hs(SL,sv,0),.18):'',st=(rb?'background:'+rb+';':'')+(t.archived==='Y'?'opacity:.55;':'');
   return '<tr data-id="'+t.task_id+'"'+(st?' style="'+st+'"':'')+'><td class="ck" style="box-shadow:inset 7px 0 0 '+(sv?hc(hs(SL,sv,0),1):'transparent')+'"><input type="checkbox" class="rk"'+(S.sel.has(t.task_id)?' checked':'')+'></td>'+
-  '<td style="min-width:240px;max-width:420px">'+(()=>{const lg=t.description.split('\n').length>3||t.description.length>220;return '<div class="clamp'+(lg?' long':'')+'" title="'+esc(t.description)+'">'+esc(t.description)+'</div>'+(lg?'<div class="lh mute">▾ klik teks untuk lihat selengkapnya</div>':'');})()+(t.remark?'<div class="mute" style="font-size:12px;white-space:pre-line">'+esc(t.remark)+'</div>':'')+'<div>'+fs.filter(f=>t.custom&&t.custom[f.field_id]).slice(0,4).map(f=>'<span class="tag"'+(scF&&f.field_id===scF.field_id?' style="background:'+hc(hs(SL,sv,0),.3)+';border-color:'+hc(hs(SL,sv,0),1)+'"':'')+'>'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('')+'</div></td>'+
-  '<td>'+pv.map(p=>chip(hp(p),p)).join('')+'</td><td style="white-space:nowrap;font-size:12px">'+(t.planned_start?esc(String(t.planned_start).slice(5))+'<br>→ '+esc(String(t.planned_finish||'').slice(5)):'<span class="mute">–</span>')+'</td>'+
+  '<td style="min-width:240px;max-width:420px">'+(()=>{const lg=t.description.split('\n').length>3||t.description.length>220;return '<div class="clamp'+(lg?' long':'')+'" title="'+esc(t.description)+'">'+esc(t.description)+'</div>'+(lg?'<div class="lh mute">▾ klik teks untuk lihat selengkapnya</div>':'');})()+(t.remark?'<div class="mute" style="font-size:12px;white-space:pre-line">'+esc(t.remark)+'</div>':'')+'<div>'+fs.filter(f=>t.custom&&t.custom[f.field_id]&&f.field_type!=='number').slice(0,4).map(f=>'<span class="tag"'+(scF&&f.field_id===scF.field_id?' style="background:'+hc(hs(SL,sv,0),.3)+';border-color:'+hc(hs(SL,sv,0),1)+'"':'')+'>'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('')+'</div></td>'+
+  '<td>'+pv.map(p=>chip(hp(p),p)).join('')+'</td>'+nfs.map(f=>'<td><input type="number" class="mpi" min="0" step="any" data-id="'+t.task_id+'" data-f="'+f.field_id+'" value="'+esc((t.custom||{})[f.field_id]||'')+'" placeholder="0" title="'+esc(f.field_name)+' · isi lalu Enter / klik di luar"></td>').join('')+'<td style="white-space:nowrap;font-size:12px">'+(t.planned_start?esc(String(t.planned_start).slice(5))+'<br>→ '+esc(String(t.planned_finish||'').slice(5)):'<span class="mute">–</span>')+'</td>'+
   '<td><div class="hgrid">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00');return '<i class="hb'+(a<s0+36e5&&b>s0?' on':'')+'" data-h="'+x+'" title="'+z(x)+':00"></i>';}).join('')+'</div></td>'+
   '<td style="min-width:160px"><div class="bar"><i style="width:'+t.progress+'%"></i></div><div class="row" style="margin:4px 0 0"><input type="range" min="0" max="100" step="5" value="'+t.progress+'" data-id="'+t.task_id+'"><b class="pv2">'+t.progress+'%</b></div></td>'+
   '<td>'+bdg(t.status)+(t.delayed_start?' '+bdg('Delayed'):'')+'<div style="margin-top:3px">'+bdg(t.deadline)+'</div></td>'+
-  '<td style="white-space:nowrap"><button class="ib" data-a="h" data-id="'+t.task_id+'" title="Riwayat">🕘</button> <button class="ib" data-a="e" data-id="'+t.task_id+'" title="Edit">✎</button> <button class="ib" data-a="r" data-id="'+t.task_id+'" title="'+(t.archived==='Y'?'Pulihkan':'Arsipkan')+'">'+(t.archived==='Y'?'↩':'▣')+'</button> <button class="ib bad" data-a="d" data-id="'+t.task_id+'" title="Hapus">🗑</button></td></tr>';}).join('')||'<tr><td colspan="8">'+empty('Tidak ada task. Klik "+ Task" atau "Import Excel".')+'</td></tr>')+'</table>';
+  '<td style="white-space:nowrap"><button class="ib" data-a="h" data-id="'+t.task_id+'" title="Riwayat">🕘</button> <button class="ib" data-a="e" data-id="'+t.task_id+'" title="Edit">✎</button> <button class="ib" data-a="r" data-id="'+t.task_id+'" title="'+(t.archived==='Y'?'Pulihkan':'Arsipkan')+'">'+(t.archived==='Y'?'↩':'▣')+'</button> <button class="ib bad" data-a="d" data-id="'+t.task_id+'" title="Hapus">🗑</button></td></tr>';}).join('')||'<tr><td colspan="8">'+empty('Tidak ada task. Klik "+ Task" atau "Import Excel".')+'</td></tr>')+mpFoot+'</table>';
  updSel();}
 function gridDrag(e){const hb=e.target.closest&&e.target.closest('.hb');if(!hb)return;e.preventDefault();
  if(locked('grid_edit')&&!S.pw){ensurePw('grid_edit').catch(()=>{});return;} // minta password dulu sebelum menyeret
@@ -1350,5 +1373,52 @@ document.addEventListener('keydown',e=>{const a=document.activeElement;if(e.ctrl
  if(e.key==='/'){e.preventDefault();show('mt');setTimeout(()=>{const q=$('mq');if(q)q.focus();},60);}else if(/^[1-7]$/.test(e.key)){const b=document.querySelectorAll('#nav button')[+e.key-1];if(b)b.click();}});
 document.querySelector('header h1').insertAdjacentHTML('afterbegin','<i id="net" class="'+(window.fbOnline?'on':'')+'" title="Menyambung…"></i>');$('xl').title='Export Excel + backup lengkap (bisa di-Import kembali lewat Admin)';
 document.addEventListener('click',e=>{const c=e.target.closest&&e.target.closest('#mtab .clamp.long');if(!c)return;c.classList.toggle('open');const h=c.nextElementSibling;if(h&&h.classList.contains('lh'))h.textContent=c.classList.contains('open')?'▴ tutup':'▾ klik teks untuk lihat selengkapnya';});
+/* ---- Export PDF: laporan ikut filter yang sedang aktif (cetak browser -> Simpan sebagai PDF) ---- */
+const TABN={ov:'Overview',mt:'Maintenance',pw:'Power Ramp Down / Ramp Up',tl:'Timeline',an:'Analytics',nt:'Notifikasi'};
+const fdm=v=>{const d=String(v||'');return d?d.slice(8,10)+'/'+d.slice(5,7)+' '+d.slice(11,16):'–';};
+const fnum=v=>{const n=N(v);return isNaN(n)?'':f2(n);};
+function nowStamp(){const tz={WIB:'Asia/Jakarta',WITA:'Asia/Makassar',WIT:'Asia/Jayapura'}[S.cfg.TZ];try{return new Date().toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:tz})+(S.cfg.TZ?' '+S.cfg.TZ:'');}catch(e){return new Date().toLocaleString();}}
+function printReport(title,html){let p=$('pr');if(!p){p=document.createElement('div');p.id='pr';document.body.appendChild(p);}
+ p.innerHTML='<div class="rh"><div><h1>'+esc(title)+'</h1><div class="rs">'+esc(pn(proj().name))+' · dicetak '+esc(nowStamp())+' oleh '+esc(S.by||'-')+'</div></div><div class="rl">🔥 Furnace Shutdown Management</div></div>'+html;
+ const t0=document.title;document.title=title+' - '+pn(proj().name);
+ window.onafterprint=()=>{document.title=t0;p.innerHTML='';window.onafterprint=null;};
+ toast('Di jendela cetak, pilih tujuan "Simpan sebagai PDF"');setTimeout(()=>window.print(),250);}
+function pdfMt(){const v=S.mtv;if(!v||!S.tasks)return toast('Buka tab Maintenance dulu.',1);const {L,hrs,day,scOf,SL,PL,hs,hp,hc,fs,chip,nfs,mpF,mpv}=v,fl=[];
+ if(MF.q)fl.push('Cari: "'+MF.q+'"');if(MF.st)fl.push('Status: '+MF.st);if(MF.dl)fl.push('Deadline: '+MF.dl);if(MF.pic)fl.push('PIC: '+MF.pic);
+ Object.keys(MF.ff).forEach(id=>{if(MF.ff[id]){const f=fs.find(x=>x.field_id===id);fl.push((f?f.field_name:'Filter')+': '+MF.ff[id]);}});
+ const cn=k=>L.filter(t=>t.status===k).length,avg=L.length?Math.round(L.reduce((a,t)=>a+Number(t.progress||0),0)/L.length):0,od=L.filter(t=>t.deadline==='Overdue').length;
+ let h='<div class="sum"><span>Filter: <b>'+(fl.length?esc(fl.join(' · ')):'Semua pekerjaan')+'</b></span><span>Jumlah: <b>'+L.length+'</b> task</span><span>Not Started <b>'+cn('Not Started')+'</b></span><span>Ongoing <b>'+cn('Ongoing')+'</b></span><span>Completed <b>'+cn('Completed')+'</b></span><span>Overdue <b>'+od+'</b></span><span>Rata-rata progress <b>'+avg+'%</b></span>'+(hrs.length?'<span>Grid jam: <b>'+esc(dPart(day))+' · '+z(hrs[0])+':00–'+z(hrs[hrs.length-1])+':59</b></span>':'')+nfs.map(f=>'<span>Total '+esc(f.field_name)+': <b>'+f2(L.reduce((a,t)=>a+mpv(t,f),0))+'</b></span>').join('')+'</div>';
+ if(SL.length||PL.length)h+='<div class="sum">'+(SL.length?'<span>Scope (garis kiri): '+SL.map(x=>chip(hs(SL,x,0),x)).join('')+'</span>':'')+(PL.length?'<span>PIC (warna baris): '+PL.map(x=>chip(hp(x),x)).join('')+'</span>':'')+'</div>';
+ h+='<table><thead><tr><th>No</th><th>Pekerjaan</th><th>PIC</th>'+nfs.map(f=>'<th>'+esc(f.field_name)+'</th>').join('')+'<th>Jadwal</th><th>Jam · '+esc(dPart(day))+'<div class="hl">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th><th>Progress</th><th>Status</th></tr></thead><tbody>'+
+ (L.map((t,i)=>{const sv=scOf(t),pv=picsOf(t),a=+D(t.planned_start),b=+D(t.planned_finish),rb=pv.length?(pv.length===1?hc(hp(pv[0]),.22):'linear-gradient(90deg,'+pv.map(p=>hc(hp(p),.28)).join(',')+')'):sv?hc(hs(SL,sv,0),.18):'',
+   tags=fs.filter(f=>(t.custom||{})[f.field_id]&&f.field_type!=='number').map(f=>'<span class="tg">'+esc(f.field_name)+': '+esc(t.custom[f.field_id])+'</span>').join('');
+  return '<tr style="'+(rb?'background:'+rb+';':'')+'"><td style="border-left:6px solid '+(sv?hc(hs(SL,sv,0),1):'#cfd6df')+'">'+(i+1)+'</td><td><div class="ds">'+esc(t.description)+'</div>'+(t.remark?'<div class="rm">'+esc(t.remark)+'</div>':'')+(tags?'<div>'+tags+'</div>':'')+'</td><td>'+pv.map(p=>chip(hp(p),p)).join('')+'</td>'+nfs.map(f=>'<td class="nw">'+esc((t.custom||{})[f.field_id]||'')+'</td>').join('')+
+   '<td class="nw">'+fdm(t.planned_start)+'<br>→ '+fdm(t.planned_finish)+(t.planned_duration_h?'<br><span class="mu">'+fnum(t.planned_duration_h)+' jam</span>':'')+'</td><td><div class="hg">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00');return '<i'+(a<s0+36e5&&b>s0?' class="on"':'')+'></i>';}).join('')+'</div></td>'+
+   '<td class="nw"><div class="pbar"><i style="width:'+(+t.progress||0)+'%"></i></div><b>'+(+t.progress||0)+'%</b></td><td class="nw">'+bdg(t.status)+(t.delayed_start?' '+bdg('Delayed'):'')+(t.deadline?'<br>'+bdg(t.deadline):'')+'</td></tr>';}).join('')||'<tr><td colspan="7">Tidak ada pekerjaan pada filter ini.</td></tr>')+(mpF&&L.length?'<tr><td colspan="'+(4+nfs.length)+'" style="text-align:right"><b>Total '+esc(mpF.field_name)+' per jam</b></td><td><div class="hl mpl">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00'),sm=L.reduce((a,t)=>(+D(t.planned_start)<s0+36e5&&+D(t.planned_finish)>s0)?a+mpv(t,mpF):a,0);return '<span>'+(sm?f2(sm):'')+'</span>';}).join('')+'</div></td><td colspan="2"></td></tr>':'')+'</tbody></table>';
+ printReport('Laporan Maintenance',h);}
+function pdfPw(){if(!S.power)return;const sc=S.power.schedule.slice().sort((a,b)=>String(a.schedule_datetime)<String(b.schedule_datetime)?-1:1),im={};S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);
+ const svg=($('s-pw')||document).querySelector('.chartbox svg');let h=svg?'<div class="chb">'+svg.outerHTML+'</div>':'';
+ h+='<div class="sum">'+PHASES.map(ph=>{const I=S.power.intervals.filter(i=>i.phase===ph),sm=k=>I.reduce((a,i)=>a+(N(i[k])||0)*(N(i.duration_h)||0),0);return '<span>'+ph+': plan <b>'+f2(sm('planned_calcine'))+'</b> ton · actual <b>'+f2(sm('actual_calcine'))+'</b> ton calcine</span>';}).join('')+'<span>Satuan: Power MW · GHE kWh/t · Calcine t/h</span><span>Rumus: '+esc(S.cfg.FORMULA_VERSION||'')+'</span></div>';
+ PHASES2.forEach(([ph])=>{const R=sc.filter(r=>r.phase===ph);if(!R.length)return;
+  h+='<h3>'+ph+' · rincian per jam</h3><table><thead><tr><th rowspan="2">No</th><th colspan="6">PLAN</th><th colspan="6">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th rowspan="2">Keterangan</th></tr><tr><th>Tanggal</th><th>Jam</th><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Tanggal</th><th>Jam</th><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Power</th><th>GHE</th><th>Calcine</th></tr></thead><tbody>'+
+  R.map((r,i)=>{const iv=im[r.schedule_id],du=iv?N(iv.duration_h):NaN,pc=iv?N(iv.planned_calcine):NaN,ac=iv?N(iv.actual_calcine):NaN,dl=(a,b)=>{const d=N(a)-N(b);return isNaN(d)?'':f2(d);};
+   return '<tr><td>'+(i+1)+'</td><td>'+dPart(r.schedule_datetime)+'</td><td>'+tPart(r.schedule_datetime)+'</td><td>'+fnum(r.planned_power)+'</td><td>'+fnum(r.planned_ghe)+'</td><td>'+fnum(pc)+'</td><td>'+fnum(pc*du)+'</td><td>'+dPart(r.actual_datetime)+'</td><td>'+tPart(r.actual_datetime)+'</td><td>'+fnum(r.actual_power)+'</td><td>'+fnum(r.actual_ghe)+'</td><td>'+fnum(ac)+'</td><td>'+fnum(ac*du)+'</td><td>'+dl(r.actual_power,r.planned_power)+'</td><td>'+dl(r.actual_ghe,r.planned_ghe)+'</td><td>'+dl(ac,pc)+'</td><td>'+esc(r.remark||'')+'</td></tr>';}).join('')+'</tbody></table>';});
+ const ac=(S.power.activities||[]).slice().sort((a,b)=>String(a.planned_datetime)<String(b.planned_datetime)?-1:1);
+ if(ac.length)h+='<h3>Aktivitas operasional</h3><table><thead><tr><th>Fase</th><th>Aktivitas</th><th>Plan mulai</th><th>Plan selesai</th><th>Actual mulai</th><th>Actual selesai</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>'+ac.map(a=>'<tr><td>'+esc(a.phase)+'</td><td>'+esc(a.activity_name)+'</td><td>'+fdm(a.planned_datetime)+'</td><td>'+fdm(a.planned_end)+'</td><td>'+fdm(a.actual_datetime)+'</td><td>'+fdm(a.actual_end)+'</td><td>'+esc(a.status)+'</td><td>'+esc(a.remark||'')+'</td></tr>').join('')+'</tbody></table>';
+ const cl=coList();if(cl.length)h+='<h3>Callout</h3><table><tbody>'+cl.map(c=>'<tr><td class="nw">'+fshort(c.t)+'</td><td>'+Math.round(c.v*10)/10+' MW</td><td>'+esc(c.txt)+'</td></tr>').join('')+'</tbody></table>';
+ if(S.power.note)h+='<h3>Catatan operasi</h3><div class="nt">'+noteHTML(S.power.note)+'</div>';
+ printReport('Laporan Power Ramp Down / Ramp Up',h);}
+function pdfTab(){const t=S.tab;if(t==='ad')return toast('Tab Admin tidak ikut dicetak.',1);const el=$('s-'+t);if(!el)return;const c=el.cloneNode(true);
+ c.querySelectorAll('button,input[type=range],input[type=checkbox],.help,details').forEach(x=>x.remove());printReport(TABN[t]||'Laporan','<div class="gen">'+c.innerHTML+'</div>');}
+function pdfExport(){if(!S.sid)return toast('Pilih / buat project dulu.',1);if(S.tab==='mt')pdfMt();else if(S.tab==='pw')pdfPw();else pdfTab();}
+{const b=document.createElement('button');b.id='pdf';b.textContent='📄 PDF';b.title='Simpan tab yang sedang dibuka sebagai PDF (mengikuti filter aktif) · Ctrl+P';$('xl').after(b);b.onclick=()=>run(()=>pdfExport(),b);}
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&String(e.key).toLowerCase()==='p'){e.preventDefault();pdfExport();}});
+
+document.addEventListener('change',e=>{const i=e.target;if(!i.classList||!i.classList.contains('mpi'))return;const id=i.dataset.id,fid=i.dataset.f,t=S.tasks.find(x=>x.task_id===id);if(!t)return;
+ const v=i.value.trim(),old=String((t.custom||{})[fid]||'');if(v===old)return;
+ run(async()=>{try{await call('saveTask',{task:{task_id:id,shutdown_id:S.sid,custom:{[fid]:v}}});t.custom=t.custom||{};t.custom[fid]=v;rerender();toast('Tersimpan');}catch(err){rerender();throw err;}},i);});
+S.leg=localStorage.getItem('fsm_leg')==='1';
+document.addEventListener('click',e=>{if(e.target.id==='legt'){S.leg=!S.leg;try{localStorage.setItem('fsm_leg',S.leg?'1':'0');}catch(x){}drawMt();}});
+{const f=document.createElement('button');f.id='pdfab';f.className='b';f.innerHTML='📄 Export PDF';f.title='Simpan panel yang sedang dibuka sebagai PDF (mengikuti filter aktif) · Ctrl+P';f.onclick=()=>run(()=>pdfExport(),f);document.body.appendChild(f);document.body.dataset.tab=S.tab||'ov';}
 run(boot);
 </script></body></html>
