@@ -75,7 +75,7 @@ tr.sel td{background:color-mix(in srgb,var(--warn) 30%,transparent)}.ph-RD{borde
 .empty{padding:26px;text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:8px}
 .pv{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}.pv table{min-width:0}.pv td,.pv th{padding:3px 7px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}.pv .hr td{background:color-mix(in srgb,var(--ru) 20%,transparent);font-weight:600}
 .ib{background:transparent;border:1px solid var(--line);color:var(--tx);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;padding:0;transition:all .12s}.ib:hover{border-color:var(--tx);background:var(--soft)}.ib.bad:hover{border-color:var(--bad);color:var(--bad)}
-.clamp.long{cursor:zoom-in}.clamp.long.open{-webkit-line-clamp:unset;display:block;cursor:zoom-out}.lh{font-size:11px;margin-top:1px}.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.dt.bad{outline:2px solid #ef4444;background:rgba(239,68,68,.15)}.clamp.long{cursor:zoom-in}.clamp.long.open{-webkit-line-clamp:unset;display:block;cursor:zoom-out}.lh{font-size:11px;margin-top:1px}.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .ck{width:30px;text-align:center}.ck input{width:auto;min-width:0;accent-color:var(--ru)}
 .hgrid{display:flex;gap:2px;user-select:none;touch-action:none}.hb{display:block;width:20px;height:24px;border:1px solid var(--line);border-radius:3px;background:var(--soft);cursor:crosshair;transition:background .08s}.hb:hover{border-color:var(--ru)}.hb.on{background:var(--ru);border-color:var(--ru)}.hb.pre{background:color-mix(in srgb,var(--warn) 70%,transparent);border-color:var(--warn)}
 .hlab{display:flex;gap:2px;font-size:10px;color:var(--mute);font-weight:400;margin-top:2px}.hlab span{width:20px;text-align:center}
@@ -678,6 +678,7 @@ async function run1(action,p){
   try{await FDB.ref('fsm/keys/'+hn).set(true);await FDB.ref('fsm/sessions/'+UID).set({hash:hn});if(ho)await FDB.ref('fsm/keys/'+ho).remove();}catch(e){throw mapErr(e);}
   S.pw=p.newpw;return true;}
  const a=ACTIONS[action];if(!a)throw new Error('Aksi tidak dikenal: '+action);
+ const by=JSON.stringify(p||{}).match(/"\d{1,6}-\d{2}-\d{2}(?: \d{2}:\d{2})?"/g);if(by&&by.some(x=>{const y=+x.slice(1).split('-')[0];return y<2000||y>2099;}))throw new Error('Tanggal tidak wajar (tahun di luar 2000–2099). Periksa isian tanggal.');
  CUR_SID=p.shutdown_id||(p.row&&p.row.shutdown_id)||'';const u={username:String(p.by||'Anonim').slice(0,40)};
  if(a.w&&a.w!=='any')needPw_(a.w);
  if(NL[action])await loadLogs(p);
@@ -950,7 +951,7 @@ function cleanHtml(h){const d=document.createElement('div');d.innerHTML=h;const 
   if(st.some(x=>x.startsWith('background-color'))&&!st.some(x=>x.startsWith('color')))st.push('color:#111111');if(st.length)c.setAttribute('style',st.join(';'));else if(fc&&col.test(fc))c.setAttribute('style','color:'+fc);});};
  walk(d);return d.innerHTML;}
 function pwRow(r,iv){
- const dtc=(k,c)=>'<td><input type="text" class="dt" data-f="'+k+'" data-p="d" data-c="'+c+'" value="'+dPart(r[k])+'" placeholder="dd/mm/yyyy"></td><td><input type="text" class="tm" data-f="'+k+'" data-p="t" data-c="'+(c+1)+'" value="'+tPart(r[k])+'" placeholder="hh:mm"></td>';
+ const dtc=(k,c)=>'<td><input type="text" class="dt'+(r[k]&&!/^20\d\d-/.test(r[k])?' bad':'')+'" data-f="'+k+'" data-p="d" data-c="'+c+'" value="'+dPart(r[k])+'" placeholder="dd/mm/yyyy"></td><td><input type="text" class="tm" data-f="'+k+'" data-p="t" data-c="'+(c+1)+'" value="'+tPart(r[k])+'" placeholder="hh:mm"></td>';
  const gi=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'"><span class="hd" data-f="'+k+'" title="Seret untuk mengisi GHE"></span>';
  const ci=(k,c)=>iv?'<input class="n'+(iv[k+'_calcine_mode']==='Manual'?' man':'')+'" type="number" step="any" min="0" data-cf="'+k+'" data-c="'+c+'" data-iv="'+iv.interval_id+'" value="'+esc(iv[k+'_calcine'])+'" title="Otomatis = Power × 1000 / GHE. Ketik angka untuk input manual, kosongkan untuk kembali otomatis.">':'<span class="mute">–</span>';
  const nn=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'">';
@@ -1050,27 +1051,31 @@ function coDlg(o){const ex=o.id?coList().find(x=>x.id===o.id):null;
 function cvT(k,v){S.cv[k]=v?1:0;redrawCharts();}
 function redrawCharts(){document.querySelectorAll('.chartbox').forEach(b=>{b.innerHTML=chartHTML();bindChart(b);if(!S.revealed){b.classList.remove('reveal');void b.offsetWidth;b.classList.add('reveal');}});S.revealed=1;}
 const wrapT=(s,n,m)=>{const w=String(s||'').split(/\s+/),L=[];let c='';w.forEach(x=>{if((c+' '+x).trim().length>n&&c){L.push(c);c=x;}else c=(c+' '+x).trim();});if(c)L.push(c);if(L.length>m){L.length=m;L[m-1]=L[m-1].replace(/.{0,2}$/,'')+'…';}return L;};
-function chartHTML(){
- const raw=S.power.schedule,sc=raw.filter(r=>isFinite(+D(r.schedule_datetime))),ac=S.power.activities;
+const okT=t=>isFinite(t)&&t>=946684800000&&t<4102444800000;
+function chartHTML(){const bad=S.power.schedule.filter(r=>!okT(+D(r.schedule_datetime))&&r.schedule_datetime).length;
+ return (bad?'<div class="help" style="color:#ef4444;font-weight:600">⚠ '+bad+' titik power punya tanggal tidak wajar (di luar tahun 2000–2099) dan disembunyikan dari grafik. Perbaiki di tab Power (kolom bertanda merah) atau hapus titiknya.</div>':'')+chartHTML0();}
+function chartHTML0(){
+ const raw=S.power.schedule,sc=raw.filter(r=>okT(+D(r.schedule_datetime))),ac=S.power.activities;
  if(!raw.length)return empty('Belum ada data power. Generate jadwal, impor dari Excel, atau tambah titik manual di menu Power.');
  if(!sc.length)return empty('Tanggal pada jadwal power tidak terbaca. Pastikan Code.gs terbaru sudah di-deploy sebagai versi baru, lalu muat ulang halaman.');
  if(S.coffSid!==S.sid){S.coffSid=S.sid;try{S.coff=JSON.parse(localStorage.getItem('fsm_co_'+S.sid)||'{}');}catch(e){S.coff={};}}
  const cv=S.cv,W=960,H=364,L=50,Rr=16,T=34,B=66,col={'Ramp Down':'var(--rd)','Ramp Up':'var(--ru)'};S.pts=[];
  const times=[];sc.forEach(r=>{times.push(+D(r.schedule_datetime));if(r.actual_datetime)times.push(+D(r.actual_datetime));});
  ac.forEach(a=>['planned_datetime','planned_end','actual_datetime','actual_end'].forEach(k=>{if(a[k])times.push(+D(a[k]));}));
- const tf=times.filter(isFinite),t0=Math.min(...tf),t1=Math.max(...tf)||t0+1,pw=sc.flatMap(r=>[N(r.planned_power),N(r.actual_power)]).filter(v=>!isNaN(v)),pm=Math.max(1,...pw),stp=[1,2,5,10,20,25,50,100,200,500].find(q=>pm*1.08/q<=7)||1000,ym=Math.ceil(pm*1.08/stp)*stp;
+ const tf=times.filter(okT),t0=Math.min(...tf),t1=Math.max(...tf)||t0+1,pw=sc.flatMap(r=>[N(r.planned_power),N(r.actual_power)]).filter(v=>!isNaN(v)),pm=Math.max(1,...pw),stp=[1,2,5,10,20,25,50,100,200,500].find(q=>pm*1.08/q<=7)||Math.pow(10,Math.ceil(Math.log10(pm*1.08/7))),ym=Math.ceil(pm*1.08/stp)*stp;
  S.cm={t0,t1,ym,W,H,L,Rr,T,B};
  const X=t=>L+(t-t0)/Math.max(t1-t0,1)*(W-L-Rr),Y=v=>T+(1-v/ym)*(H-T-B);let s='<svg viewBox="0 0 '+W+' '+H+'"><g font-size="11" fill="var(--mute)">';
  for(let v=0;v<=ym+1e-9;v+=stp){const y=Y(v);s+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+v+'</text>';}
- {const hT=(t1-t0)/36e5,lab=[1,2,3,6,12,24].find(q=>hT/q<=64)||24,MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  for(let t=Math.ceil(t0/36e5)*36e5;t<=t1+1;t+=36e5){const d=new Date(t),h=d.getHours(),x=X(t);
+ {const hT=(t1-t0)/36e5,sh=[1,2,3,6,12,24,48,96,168,336,720,2160,8760].find(q=>hT/q<=64)||17520,gh=hT<=96?1:sh,MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],fd=d=>z(d.getDate())+'-'+MN[d.getMonth()]+'-'+String(d.getFullYear()).slice(2);
+  let tt=Math.ceil(t0/36e5)*36e5;if(gh>=24){const d0=new Date(t0);d0.setHours(0,0,0,0);if(+d0<t0)d0.setDate(d0.getDate()+1);tt=+d0;}
+  for(let k=0;tt<=t1+1&&k<300;tt+=gh*36e5,k++){const d=new Date(tt),h=d.getHours(),x=X(tt);
    s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(H-B+4)+'" stroke="var(--line)" opacity="'+(h===0?.9:.35)+'"/>';
-   if(h%lab===0)s+='<text transform="translate('+(x+3)+','+(H-B+8)+') rotate(-90)" text-anchor="end" font-size="9.5">'+z(h)+':00</text>';}
+   if(sh<24?(gh===sh||h%sh===0):true)s+='<text transform="translate('+(x+3)+','+(H-B+8)+') rotate(-90)" text-anchor="end" font-size="9.5">'+(sh<24?z(h)+':00':fd(d))+'</text>';}
   s+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+(H-22)+'" y2="'+(H-22)+'" stroke="var(--line)"/>';
-  const ds=new Date(t0);ds.setHours(0,0,0,0);
-  for(;+ds<=t1;ds.setDate(ds.getDate()+1)){const nx=new Date(ds);nx.setDate(nx.getDate()+1);const xa=X(Math.max(+ds,t0)),xb=X(Math.min(+nx,t1));
-   if(+ds>t0)s+='<line x1="'+xa+'" x2="'+xa+'" y1="'+(H-B)+'" y2="'+(H-2)+'" stroke="var(--mute)" opacity=".7"/>';
-   if(xb-xa>=44)s+='<text x="'+((xa+xb)/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--tx)">'+z(ds.getDate())+'-'+MN[ds.getMonth()]+'-'+String(ds.getFullYear()).slice(2)+'</text>';}}
+  if(hT<=24*45){const ds=new Date(t0);ds.setHours(0,0,0,0);
+   for(let n=0;+ds<=t1&&n<60;ds.setDate(ds.getDate()+1),n++){const nx=new Date(ds);nx.setDate(nx.getDate()+1);const xa=X(Math.max(+ds,t0)),xb=X(Math.min(+nx,t1));
+    if(+ds>t0)s+='<line x1="'+xa+'" x2="'+xa+'" y1="'+(H-B)+'" y2="'+(H-2)+'" stroke="var(--mute)" opacity=".7"/>';
+    if(xb-xa>=44)s+='<text x="'+((xa+xb)/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--tx)">'+fd(ds)+'</text>';}}}
  s+='<text x="12" y="'+(T-12)+'">MW</text></g>';
  const hN=Math.max(1,(t1-t0)/36e5),rotL=(W-L-Rr)/hN<15,vlab=(p,da,ph)=>{const lx=+X(p[0]).toFixed(1),ly=Y(p[1]),v=Math.round(p[1]*10)/10,fs='font-size="9" font-weight="600" fill="'+col[ph]+'"';
   return rotL?'<text transform="translate('+(lx+3)+','+(da?ly-7:ly+7)+') rotate(-90)" text-anchor="'+(da?'start':'end')+'" '+fs+'>'+v+'</text>':'<text x="'+lx+'" y="'+(da?ly-7:ly+15)+'" text-anchor="middle" '+fs+'>'+v+'</text>';};
@@ -1207,7 +1212,7 @@ async function tplDlg(t){
 
 /* ======== Import dari Excel (maintenance & power) — dibaca di browser dengan SheetJS ======== */
 const MON={jan:1,feb:2,mar:3,apr:4,mei:5,may:5,jun:6,jul:7,agu:8,aug:8,ags:8,sep:9,okt:10,oct:10,nov:11,des:12,dec:12};
-function mk(y,mo,d,h,mi){y=+y;if(y<100)y+=2000;if(mo>12&&d<=12){const x=mo;mo=d;d=x;}if(mo<1||mo>12||d<1||d>31)return '';return y+'-'+z(mo)+'-'+z(d)+' '+z(h||0)+':'+z(mi||0);}
+function mk(y,mo,d,h,mi){y=+y;if(y<100)y+=2000;if(!(y>=2000&&y<=2099))return '';if(mo>12&&d<=12){const x=mo;mo=d;d=x;}if(mo<1||mo>12||d<1||d>31)return '';return y+'-'+z(mo)+'-'+z(d)+' '+z(h||0)+':'+z(mi||0);}
 function pDT(v){v=String(v==null?'':v).trim();if(!v)return '';let m;
  if(m=v.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T,]+(\d{1,2})[:.](\d{2}))?/))return mk(m[1],+m[2],+m[3],+m[4],+m[5]);
  if(m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[ T,]+(\d{1,2})[:.](\d{2}))?/))return mk(m[3],+m[2],+m[1],+m[4],+m[5]);
