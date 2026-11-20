@@ -114,23 +114,51 @@ input[type=range]{accent-color:var(--rd);cursor:pointer}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}::-webkit-scrollbar-thumb:hover{background:var(--mute)}
 
 #pr{display:none}
-@media print{@page{size:A4 landscape;margin:9mm}
- html,body{background:#fff!important}body>*:not(#pr){display:none!important}
- #pr{display:block!important;--bg:#fff;--card:#fff;--tx:#18202b;--mute:#5b6675;--line:#cfd6df;--soft:#f4f6f9;--rd:#e8590c;--ru:#1c7ed6;--ok:#2b9348;--warn:#e67700;--bad:#d62839;--idle:#8a94a0;color:#18202b;font:11px/1.4 system-ui,'Segoe UI',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
- #pr .rh{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #e8590c;padding-bottom:6px;margin-bottom:10px}
- #pr h1{margin:0;font-size:20px}#pr h3{margin:14px 0 6px;font-size:13px;break-after:avoid}#pr .rs{color:#5b6675;font-size:11px}#pr .rl{font-weight:700;color:#e8590c;font-size:12px}
- #pr .sum{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 8px;font-size:11px;align-items:center}#pr .sum b{font-size:12px}
- #pr table{width:100%;border-collapse:collapse;font-size:10px;min-width:0}#pr th{background:#eef1f5;text-align:left;padding:3px 5px;border:1px solid #cfd6df;color:#18202b}
- #pr td{padding:3px 5px;border:1px solid #dde2e8;vertical-align:top;color:#18202b}#pr thead{display:table-header-group}#pr tr{break-inside:avoid}#pr .nw{white-space:nowrap}#pr .mu{color:#5b6675}
- #pr .ds{white-space:pre-line;font-weight:600}#pr .rm{white-space:pre-line;color:#5b6675;font-size:9.5px}#pr .tg{display:inline-block;border:1px solid #cfd6df;border-radius:4px;padding:0 5px;margin:2px 3px 0 0;font-size:9px;background:#fff}
- #pr .hg{display:flex;gap:1px}#pr .hg i{display:block;width:11px;height:14px;border:1px solid #c5ccd6;background:#fff}#pr .hg i.on{background:#1c7ed6;border-color:#1c7ed6}
+@media print{@page{size:A4 landscape;margin:0}
+ html,body{margin:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ html[data-theme=dark],html[data-theme=dark] body{background:#0d1117!important}
+ html[data-theme=light],html[data-theme=light] body{background:#fff!important}
+ body>*:not(#pr){display:none!important}
+ #pr{display:block!important;box-sizing:border-box;min-height:100vh;padding:10mm 11mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;font:11px/1.45 system-ui,'Segoe UI',Arial,sans-serif;
+  --pbg:#fff;--ptx:#18202b;--pmu:#5b6675;--pln:#d6dce4;--pth:#eaeef3;--pcd:#fff;--pzb:#f6f8fa;
+  --bg:#fff;--card:#fff;--tx:#18202b;--mute:#5b6675;--line:#d6dce4;--soft:#f4f6f9;--rd:#e8590c;--ru:#1c7ed6;--ok:#2b9348;--warn:#e67700;--bad:#d62839;--idle:#8a94a0;background:var(--pbg);color:var(--ptx)}
+ #pr.dk{--pbg:#0d1117;--ptx:#e6edf3;--pmu:#8b98a7;--pln:#2a313c;--pth:#1d2430;--pcd:#161b22;--pzb:#121821;
+  --bg:#0d1117;--card:#161b22;--tx:#e6edf3;--mute:#8b98a7;--line:#2a313c;--soft:#1d2430;--rd:#ff7a3d;--ru:#4dabf7;--ok:#51cf66;--warn:#ffa94d;--bad:#ff6b6b;--idle:#7b8794}
+ #pr .rh{display:flex;justify-content:space-between;align-items:center;padding:0 0 9px;margin-bottom:12px;border-bottom:3px solid var(--rd)}
+ #pr h1{margin:0;font-size:21px;letter-spacing:.2px}#pr h3{margin:16px 0 7px;font-size:13px;break-after:avoid;padding-left:8px;border-left:4px solid var(--rd)}
+ #pr .rs{color:var(--pmu);font-size:11px;margin-top:2px}#pr .rl{font-weight:700;color:var(--rd);font-size:12px}
+ #pr .sum{display:flex;flex-wrap:wrap;gap:5px 7px;margin:0 0 9px;font-size:10.5px;align-items:center}
+ #pr .sum>span{background:var(--pcd);border:1px solid var(--pln);border-radius:8px;padding:3px 9px;color:var(--ptx)}#pr .sum b{font-size:11.5px}
+ #pr table{width:100%;border-collapse:collapse;font-size:10px;min-width:0;color:var(--ptx)}
+ #pr th{background:var(--pth);text-align:left;padding:4px 6px;border:1px solid var(--pln);color:var(--ptx);font-weight:700}
+ #pr td{padding:3.5px 6px;border:1px solid var(--pln);vertical-align:top;color:var(--ptx)}
+ #pr table.zb tbody tr:nth-child(even) td{background:var(--pzb)}
+ #pr thead{display:table-header-group}#pr tr{break-inside:avoid}#pr .nw{white-space:nowrap}#pr .mu{color:var(--pmu)}
+ #pr .ds{white-space:pre-line;font-weight:600}#pr .rm{white-space:pre-line;color:var(--pmu);font-size:9.5px}
+ #pr .tg{display:inline-block;border:1px solid var(--pln);border-radius:4px;padding:0 5px;margin:2px 3px 0 0;font-size:9px;background:var(--pcd)}
+ #pr .hg{display:flex;gap:1px}#pr .hg i{display:block;width:11px;height:14px;border:1px solid var(--pln);background:transparent}#pr .hg i.on{background:var(--ru);border-color:var(--ru)}
  #pr .hl{display:flex;gap:1px;font-size:7px;font-weight:400;margin-top:2px}#pr .hl span{width:12px;text-align:center}
- #pr .pbar{height:6px;background:#e5e9ee;border-radius:4px;overflow:hidden;margin-bottom:2px;min-width:70px}#pr .pbar i{display:block;height:100%;background:#e8590c}
- #pr .chb{margin:0 0 8px;break-inside:avoid}#pr .chb svg{width:100%;height:auto;max-height:100mm}#pr .nt{border:1px solid #cfd6df;border-radius:8px;padding:8px 10px;line-height:1.5;break-inside:avoid}
- #pr .tw{overflow:visible}#pr .card{box-shadow:none;break-inside:avoid;margin-bottom:8px}#pr .pc{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;font-size:9.5px;margin:1px 3px 1px 0}
+ #pr .pbar{height:6px;background:var(--pln);border-radius:4px;overflow:hidden;margin-bottom:2px;min-width:70px}#pr .pbar i{display:block;height:100%;background:var(--rd)}
+ #pr .chb{margin:0 0 9px;break-inside:avoid;background:var(--pcd);border:1px solid var(--pln);border-radius:10px;padding:6px}#pr .chb svg{width:100%;height:auto;max-height:100mm}
+ #pr .nt{border:1px solid var(--pln);background:var(--pcd);border-radius:10px;padding:9px 12px;line-height:1.55;break-inside:avoid}
+ #pr .tw{overflow:visible}#pr .card{box-shadow:none;break-inside:avoid;margin-bottom:8px;background:var(--pcd);border:1px solid var(--pln)}
+ #pr .pc{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;font-size:9.5px;margin:1px 3px 1px 0}
 }
 .mpi{width:76px;text-align:center;font-weight:700}.hb.mpn{font-style:normal;font-size:10px;font-weight:700;line-height:20px;text-align:center;color:var(--tx);background:transparent;border-color:transparent}.mpc{background:rgba(43,147,72,.22);border:1px solid #2b9348}tr.mpf td{background:var(--soft);border-top:2px solid var(--line)}#pr .mpl span{font-size:8px;font-weight:700;color:#18202b}
 #pdfab{position:fixed;right:20px;bottom:20px;z-index:40;border-radius:999px;padding:11px 18px;font-weight:700;background:var(--rd);color:#fff;border:0;box-shadow:0 8px 22px rgba(0,0,0,.35)}body[data-tab=ad] #pdfab{display:none}@media(max-width:700px){#pdfab{right:12px;bottom:12px;padding:10px 14px}}
+
+.hin{display:inline-block;position:relative;vertical-align:middle;margin-left:8px}
+.hin>summary{list-style:none;cursor:pointer;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--warn);background:var(--card);user-select:none}
+.hin>summary::-webkit-details-marker{display:none}.hin>summary:hover{border-color:var(--warn)}
+.hin[open]>summary{background:var(--warn);color:#fff;border-color:var(--warn)}
+.hinb{position:absolute;z-index:30;left:0;top:30px;width:min(560px,86vw);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px;box-shadow:0 14px 34px rgba(0,0,0,.4);font-size:12.5px;color:var(--mute);line-height:1.55;font-weight:400;text-align:left}
+.copts{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:8px;align-items:center}.copts label{display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer}.mu2{font-size:12px}
+.legend{position:relative}.legend label{white-space:nowrap}
+.gw{display:flex;align-items:center;gap:4px;white-space:nowrap}.gw .hd{flex:none;margin:0}
+#mtab,#mtab.tw{overflow:visible}
+#mtab th{position:sticky;top:var(--stk,112px);z-index:6;background:var(--soft);box-shadow:0 1px 0 var(--line)}
+#mtab th.srt{cursor:pointer;user-select:none;white-space:nowrap}#mtab th.srt:hover{color:var(--ru)}.sa{opacity:.35;font-size:10px}
+@media(max-width:1100px){#mtab,#mtab.tw{overflow-x:auto}#mtab th{position:static}}
 </style></head><body>
 <div id="ld"></div>
 <div id="top"><header><h1>Furnace Shutdown Management<small>Maintenance · Power Ramp Down / Ramp Up</small></h1>
@@ -344,7 +372,7 @@ function recalc_(sid) { // hitung ulang POWER_INTERVALS untuk 1 shutdown
     const r = all.filter(x => x.phase === ph).sort((a, b) => a.schedule_datetime < b.schedule_datetime ? -1 : 1);
     for (let i = 0; i < r.length - 1; i++) {
       const a = r[i], b = r[i + 1], h = (dt_(b.schedule_datetime) - dt_(a.schedule_datetime)) / 3600000;
-      const ah = (a.actual_datetime && b.actual_datetime) ? (dt_(b.actual_datetime) - dt_(a.actual_datetime)) / 3600000 : h;
+      const ah = h;
       const pr = pick(a, b, 'planned_power', 'planned_ghe'), ar = pick(a, b, 'actual_power', 'actual_ghe');
       const iid = 'INT-' + a.schedule_id + '-' + b.schedule_id, o = old[iid] || {}, pm = o.planned_calcine_mode === 'Manual', am = o.actual_calcine_mode === 'Manual';
       out.push({ interval_id: iid, shutdown_id: sid, phase: ph, start_schedule_id: a.schedule_id, end_schedule_id: b.schedule_id,
@@ -855,7 +883,7 @@ function renderMt(){
    else if(t.classList.contains('ckall')){mt.querySelectorAll('.rk').forEach(x=>{x.checked=t.checked;const id=x.closest('tr').dataset.id;t.checked?S.sel.add(id):S.sel.delete(id);});updSel();}};
   mt.onpointerdown=gridDrag;}
  drawMt();}
-function updSel(){const n=S.sel.size;$('msel').innerHTML=n?'<b>'+n+'</b> dipilih <button class="b alt sm" data-bulk style="color:var(--bad)">🗑 Hapus terpilih</button> <button class="b alt sm" data-clr>Batal pilih</button>':'<span>Tip: centang beberapa pekerjaan untuk menghapus sekaligus · seret kotak jam untuk mengatur durasi pekerjaan.</span>';
+function updSel(){const n=S.sel.size;$('msel').innerHTML=n?'<b>'+n+'</b> dipilih <button class="b alt sm" data-bulk style="color:var(--bad)">🗑 Hapus terpilih</button> <button class="b alt sm" data-clr>Batal pilih</button>':hin('mt1','Centang beberapa pekerjaan untuk menghapus / mengarsipkan sekaligus · seret kotak jam untuk mengatur durasi · klik judul kolom untuk mengurutkan · klik deskripsi panjang untuk membuka penuh · kolom Man Power bisa diisi langsung.');
  const all=$('mtab').querySelector('.ckall'),rows=[...$('mtab').querySelectorAll('.rk')];if(all)all.checked=rows.length>0&&rows.every(r=>r.checked);}
 function drawMt(){
  const base=S.tasks.filter(t=>S.showArch||t.archived!=='Y'),fs=pfields(),day=gridDay(),G=S.g,ffs=fs.filter(f=>FFN.test(f.field_name));
@@ -867,17 +895,19 @@ function drawMt(){
  const na=S.tasks.filter(t=>t.archived==='Y').length,picSel=PLs.length?'<label>PIC <select data-pic="1"><option value="">Semua</option>'+PLs.map(v=>'<option'+(MF.pic.toLowerCase()===v.toLowerCase()?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>':'';
  $('mfil').innerHTML=ffs.map(f=>{const vals=[...new Set(base.map(t=>(t.custom||{})[f.field_id]).filter(Boolean))].sort();return '<label>'+esc(f.field_name)+' <select data-ff="'+f.field_id+'"><option value="">Semua</option>'+vals.map(v=>'<option'+(MF.ff[f.field_id]===v?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>';}).join('')+picSel+
   '<span style="flex:1"></span><label>Grid jam · tanggal <input type="date" id="gd" value="'+day+'"></label><label>dari <select id="gf">'+hopts(G.from)+'</select></label><label>sampai <select id="gt">'+hopts(G.to)+'</select></label><button class="b alt sm" id="march">'+(S.showArch?'Sembunyikan arsip':'Tampilkan arsip ('+na+')')+'</button>';
- const L=base.filter(t=>match(t)&&(!MF.st||t.status===MF.st)&&(!MF.dl||t.deadline===MF.dl)).sort((a,b)=>(a.planned_finish||'~')<(b.planned_finish||'~')?-1:1);
+ const kf=t=>{const k=S.sort.k;if(k==='desc')return String(t.description||'').toLowerCase();if(k==='pic')return picsOf(t).join(',').toLowerCase()||'\uffff';if(k==='start')return t.planned_start||'\uffff';if(k==='progress')return Number(t.progress)||0;if(k==='status')return t.status||'';if(k.indexOf('n:')===0)return Number((t.custom||{})[k.slice(2)])||0;return t.planned_finish||'\uffff';};
+ const L=base.filter(t=>match(t)&&(!MF.st||t.status===MF.st)&&(!MF.dl||t.deadline===MF.dl)).sort((a,b)=>{const ka=kf(a),kb=kf(b);let c=typeof ka==='number'?ka-kb:String(ka).localeCompare(String(kb),'id',{numeric:true});if(!c)c=String(a.planned_finish||'~').localeCompare(String(b.planned_finish||'~'));return c*S.sort.d;});
  const hrs=[];for(let x=G.from;x<=G.to;x++)hrs.push(x);
  const scF=fs.find(f=>/^scope$/i.test(f.field_name)),scOf=t=>scF?((t.custom||{})[scF.field_id]||''):'',PAL=[210,28,145,285,340,48,175,0,235,90],hc=(h,a)=>'hsla('+h+',72%,52%,'+a+')',
   uni=g=>[...new Set(base.map(g).filter(Boolean))].sort(),SL=uni(scOf),PL=PLs,hs=(Lx,v,o)=>PAL[(Lx.indexOf(v)+o)%PAL.length],hp=p=>PAL[(PL.findIndex(x=>x.toLowerCase()===p.toLowerCase())+5)%PAL.length],
   chip=(h,v)=>'<span class="pc" style="background:'+hc(h,.28)+';border:1px solid '+hc(h,1)+'">'+esc(v)+'</span>',
   legB='<div class="mleg">'+(SL.length?'<b>Scope (garis kiri):</b>'+SL.map(v=>chip(hs(SL,v,0),v)).join(''):'')+(PL.length?'<b style="margin-left:12px">PIC (warna baris):</b>'+PL.map(v=>chip(hs(PL,v,5),v)).join(''):'')+'</div>';
- const nfs=fs.filter(f=>f.field_type==='number'),mpF=nfs.find(f=>/man\s*power|manpower/i.test(f.field_name))||nfs[0],mpv=(t,f)=>Number((t.custom||{})[f.field_id])||0,
+ const sh=(k,l)=>'<th class="srt" data-sort="'+k+'" title="Klik untuk mengurutkan">'+esc(l)+(S.sort.k===k?(S.sort.d>0?' ▲':' ▼'):' <span class="sa">⇅</span>')+'</th>',
+  nfs=fs.filter(f=>f.field_type==='number'),mpF=nfs.find(f=>/man\s*power|manpower/i.test(f.field_name))||nfs[0],mpv=(t,f)=>Number((t.custom||{})[f.field_id])||0,
   mpTot=nfs.length&&L.length?'<div class="mleg">👷 '+nfs.map(f=>'<b>Total '+esc(f.field_name)+' (task terfilter):</b><span class="pc mpc">'+f2(L.reduce((a,t)=>a+mpv(t,f),0))+'</span>').join(' ')+'</div>':'',
   mpFoot=(mpF&&L.length)?'<tr class="mpf"><td colspan="'+(4+nfs.length)+'" style="text-align:right"><b>👷 Total '+esc(mpF.field_name)+' per jam</b> · '+esc(dPart(day))+'</td><td><div class="hgrid">'+hrs.map(x=>{const s0=+D(day+' '+z(x)+':00'),sm=L.reduce((a,t)=>(+D(t.planned_start)<s0+36e5&&+D(t.planned_finish)>s0)?a+mpv(t,mpF):a,0);return '<i class="hb mpn" title="'+z(x)+':00 · '+f2(sm)+'">'+(sm?f2(sm):'')+'</i>';}).join('')+'</div></td><td colspan="3"></td></tr>':'';
  S.mtv={L,hrs,day,scOf,SL,PL,hs,hp,hc,fs,chip,nfs,mpF,mpv};
- $('mtab').innerHTML='<div class="mleg"><button type="button" class="b alt sm" id="legt">🎨 '+(S.leg?'Sembunyikan':'Tampilkan')+' legenda warna</button></div>'+(S.leg?legB:'')+mpTot+'<table><tr><th class="ck"><input type="checkbox" class="ckall" title="Pilih semua"></th><th>Pekerjaan</th><th>PIC</th>'+nfs.map(f=>'<th>'+esc(f.field_name)+'</th>').join('')+'<th>Jadwal</th><th><div>Jam · '+esc(day)+'</div><div class="hlab">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th><th>Progress</th><th>Status</th><th>Aksi</th></tr>'+
+ $('mtab').innerHTML='<div class="mleg"><button type="button" class="b alt sm" id="legt">🎨 '+(S.leg?'Sembunyikan':'Tampilkan')+' legenda warna</button></div>'+(S.leg?legB:'')+mpTot+'<table><tr><th class="ck"><input type="checkbox" class="ckall" title="Pilih semua"></th>'+sh('desc','Pekerjaan')+sh('pic','PIC')+nfs.map(f=>sh('n:'+f.field_id,f.field_name)).join('')+sh('start','Jadwal')+'<th><div>Jam · '+esc(day)+'</div><div class="hlab">'+hrs.map(x=>'<span>'+z(x)+'</span>').join('')+'</div></th>'+sh('progress','Progress')+sh('status','Status')+'<th>Aksi</th></tr>'+
  (L.map(t=>{const a=+D(t.planned_start),b=+D(t.planned_finish);
   const sv=scOf(t),pv=picsOf(t),rb=pv.length?(pv.length===1?hc(hp(pv[0]),.22):'linear-gradient(90deg,'+pv.map(p=>hc(hp(p),.28)).join(',')+')'):sv?hc(hs(SL,sv,0),.18):'',st=(rb?'background:'+rb+';':'')+(t.archived==='Y'?'opacity:.55;':'');
   return '<tr data-id="'+t.task_id+'"'+(st?' style="'+st+'"':'')+'><td class="ck" style="box-shadow:inset 7px 0 0 '+(sv?hc(hs(SL,sv,0),1):'transparent')+'"><input type="checkbox" class="rk"'+(S.sel.has(t.task_id)?' checked':'')+'></td>'+
@@ -934,7 +964,7 @@ function recalcLocal(){ // cermin recalc_ di server agar angka calcine & delta l
  const avg=S.cfg.CALCINE_METHOD==='AVERAGE',old={},out=[];S.power.intervals.forEach(i=>old[i.interval_id]=i);
  const rate=(p,g)=>(N(p)>0&&N(g)>0)?N(p)*1000/N(g):null; // t/h = MW x 1000 / (kWh/t)
  PHASES.forEach(ph=>{const r=S.power.schedule.filter(x=>x.phase===ph&&isFinite(+D(x.schedule_datetime))).sort((a,b)=>a.schedule_datetime<b.schedule_datetime?-1:1);
-  for(let i=0;i<r.length-1;i++){const a=r[i],b=r[i+1],h=(D(b.schedule_datetime)-D(a.schedule_datetime))/36e5,ah=(a.actual_datetime&&b.actual_datetime)?(D(b.actual_datetime)-D(a.actual_datetime))/36e5:h;
+  for(let i=0;i<r.length-1;i++){const a=r[i],b=r[i+1],h=(D(b.schedule_datetime)-D(a.schedule_datetime))/36e5,ah=h;
    const pick=(pk,gk)=>{const ra=rate(a[pk],a[gk]);if(!avg)return ra;const rb=rate(b[pk],b[gk]);return ra==null||rb==null?null:(ra+rb)/2;};
    const pr=pick('planned_power','planned_ghe'),ar=pick('actual_power','actual_ghe'),id='INT-'+a.schedule_id+'-'+b.schedule_id,o=old[id]||{},pm=o.planned_calcine_mode==='Manual',am=o.actual_calcine_mode==='Manual';
    out.push({interval_id:id,shutdown_id:S.sid,phase:ph,start_schedule_id:a.schedule_id,end_schedule_id:b.schedule_id,start_datetime:a.schedule_datetime,end_datetime:b.schedule_datetime,duration_h:h.toFixed(2),
@@ -975,20 +1005,20 @@ function cleanHtml(h){const d=document.createElement('div');d.innerHTML=h;const 
  walk(d);return d.innerHTML;}
 function pwRow(r,iv){
  const dtc=(k,c)=>'<td><input type="text" class="dt'+(r[k]&&!/^20\d\d-/.test(r[k])?' bad':'')+'" data-f="'+k+'" data-p="d" data-c="'+c+'" value="'+dPart(r[k])+'" placeholder="dd/mm/yyyy"></td><td><input type="text" class="tm" data-f="'+k+'" data-p="t" data-c="'+(c+1)+'" value="'+tPart(r[k])+'" placeholder="hh:mm"></td>';
- const gi=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'"><span class="hd" data-f="'+k+'" title="Seret untuk mengisi GHE"></span>';
+ const gi=(k,c)=>'<div class="gw"><input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'"><span class="hd" data-f="'+k+'" title="Seret untuk mengisi GHE"></span></div>';
  const ci=(k,c)=>iv?'<input class="n'+(iv[k+'_calcine_mode']==='Manual'?' man':'')+'" type="number" step="any" min="0" data-cf="'+k+'" data-c="'+c+'" data-iv="'+iv.interval_id+'" value="'+esc(iv[k+'_calcine'])+'" title="Otomatis = Power × 1000 / GHE. Ketik angka untuk input manual, kosongkan untuk kembali otomatis.">':'<span class="mute">–</span>';
  const nn=(k,c)=>'<input class="n" type="number" step="any" data-f="'+k+'" data-c="'+c+'" value="'+esc(r[k])+'">';
  return '<tr data-id="'+r.schedule_id+'" data-ph="'+r.phase+'"><td class="ck"><input type="checkbox" class="rk"></td>'+dtc('schedule_datetime',0)+'<td>'+nn('planned_power',2)+'</td><td>'+gi('planned_ghe',3)+'</td><td>'+ci('planned',4)+'</td>'+
- dtc('actual_datetime',5)+'<td>'+nn('actual_power',7)+'</td><td>'+gi('actual_ghe',8)+'</td><td>'+ci('actual',9)+'</td>'+
- '<td class="dev dP"></td><td class="dev dG"></td><td class="dev dC"></td><td><input type="text" data-f="remark" data-c="10" value="'+esc(r.remark)+'" placeholder="keterangan titik" style="min-width:170px"></td></tr>';}
+ '<td>'+nn('actual_power',5)+'</td><td>'+gi('actual_ghe',6)+'</td><td>'+ci('actual',7)+'</td>'+
+ '<td class="dev dP"></td><td class="dev dG"></td><td class="dev dC"></td><td><input type="text" data-f="remark" data-c="8" value="'+esc(r.remark)+'" placeholder="keterangan titik" style="min-width:170px"></td></tr>';}
 function renderPw(){
  const sc=S.power.schedule,im={};S.power.intervals.forEach(i=>im[i.start_schedule_id]=i);
- let h=chartCard()+calcCard()+'<div class="card"><div class="tb"><h2 style="margin:0;flex:1">Jadwal power &amp; GHE</h2><button class="b" id="pgen">Generate planned power</button><button class="b alt" id="pimp">⬆ Import Excel</button><button class="b alt" id="padd">+ Titik manual</button></div>'+
- '<div class="help">Satuan: <b>Power = MW</b> · <b>GHE = kWh/t</b> · <b>Calcine = t/h</b> (= Power × 1000 ÷ GHE), total per fase dalam <b>ton</b>. <details><summary>Petunjuk pengisian</summary><ul style="margin:6px 0 0 18px;padding:0"><li>Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik); klik titik atau aktivitas di grafik untuk mengubah keterangannya.</li><li>Tempel dari Excel: salin kolom/blok di Excel, klik sel tujuan di tabel, Ctrl+V. Terisi ke bawah (dan ke kanan bila beberapa kolom). Urutan kolom tabel: Tanggal · Jam · Power · GHE · Calcine (Plan), lalu Tanggal · Jam · Power · GHE · Calcine (Actual), Δ, Keterangan. Format tanggal bebas: 17-Nov-26, 17/11/2026, atau 2026-11-17; jam: 16:00.</li><li>GHE: seret kotak kecil di samping sel GHE ke bawah untuk mengisi nilai yang sama.</li><li>Calcine otomatis; ketik angka untuk input manual (kotak kuning), kosongkan untuk kembali otomatis. Rumus aktif: '+esc(S.cfg.FORMULA_VERSION||'')+'</li><li>Centang beberapa baris lalu <b>Hapus terpilih</b> untuk menghapus sekaligus.</li></ul></details></div>';
+ let h=chartCard()+calcCard()+'<div class="card"><div class="tb"><h2 style="margin:0">Jadwal power &amp; GHE</h2>'+hin('pw1','Satuan: <b>Power = MW</b> · <b>GHE = kWh/t</b> · <b>Calcine = t/h</b> (= Power × 1000 ÷ GHE), total per fase dalam <b>ton</b>.<ul style="margin:6px 0 0 18px;padding:0"><li>Tanggal &amp; Jam dipakai bersama oleh Plan dan Actual; yang dibedakan hanya Power, GHE, dan Calcine.</li><li>Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik).</li><li>Tempel dari Excel: salin kolom/blok, klik sel tujuan, Ctrl+V (terisi ke bawah dan ke kanan). Urutan kolom: Tanggal · Jam · Power · GHE · Calcine (Plan), lalu Power · GHE · Calcine (Actual), Δ, Keterangan. Tanggal bebas: 17-Nov-26, 17/11/2026, 2026-11-17; jam: 16:00.</li><li>GHE: seret kotak kecil di samping sel GHE ke bawah untuk mengisi nilai yang sama.</li><li>Calcine otomatis; ketik angka untuk input manual (kotak kuning), kosongkan untuk kembali otomatis. Rumus aktif: '+esc(S.cfg.FORMULA_VERSION||'')+'</li><li>Centang beberapa baris lalu <b>Hapus terpilih</b> untuk menghapus sekaligus.</li></ul>')+'<span style="flex:1"></span><button class="b" id="pgen">Generate planned power</button><button class="b alt" id="pimp">⬆ Import Excel</button><button class="b alt" id="padd">+ Titik manual</button></div>'+
+ '';
  PHASES2.forEach(([ph,cl])=>{const Rw=sc.filter(r=>r.phase===ph);
   h+='<div class="tb" style="margin-top:14px"><h3 style="margin:0;flex:1">'+ph+'</h3><span class="mute selcnt" data-ph="'+ph+'"></span><button class="b alt sm bulkp" data-ph="'+ph+'" disabled style="color:var(--bad)">🗑 Hapus terpilih</button></div><div class="tw"><table class="'+cl+'" data-ph="'+ph+'">'+
-  '<tr class="grp"><th></th><th colspan="5" class="gp">PLAN</th><th colspan="5" class="ga">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th></th></tr><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Tanggal</th><th>Jam</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Tanggal</th><th>Jam</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Power</th><th>GHE</th><th>Calcine</th><th>Keterangan</th></tr>'+
-  (Rw.map(r=>pwRow(r,im[r.schedule_id])).join('')||'<tr><td colspan="15">'+empty('Belum ada titik. Gunakan Generate, Import Excel, klik grafik, atau + Titik manual.')+'</td></tr>')+'</table></div><div class="mute ptot" data-ph="'+ph+'" style="margin-top:6px"></div>';});
+  '<tr class="grp"><th></th><th colspan="2">WAKTU</th><th colspan="3" class="gp">PLAN</th><th colspan="3" class="ga">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th></th></tr><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Tanggal</th><th>Jam</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Power (MW)</th><th>GHE (kWh/t)</th><th>Calcine (t/h)</th><th>Power</th><th>GHE</th><th>Calcine</th><th>Keterangan</th></tr>'+
+  (Rw.map(r=>pwRow(r,im[r.schedule_id])).join('')||'<tr><td colspan="13">'+empty('Belum ada titik. Gunakan Generate, Import Excel, klik grafik, atau + Titik manual.')+'</td></tr>')+'</table></div><div class="mute ptot" data-ph="'+ph+'" style="margin-top:6px"></div>';});
  const dur=(a,b)=>a&&b&&isFinite(+D(a))&&isFinite(+D(b))?f2((+D(b)-+D(a))/36e5)+' jam':'';
  h+='</div><div class="card"><div class="tb"><h2 style="margin:0;flex:1">Aktivitas operasional</h2><span class="mute selcnt" data-ph="act"></span><button class="b alt sm bulkp" data-ph="act" disabled style="color:var(--bad)">🗑 Hapus terpilih</button><button class="b" id="aadd">+ Aktivitas</button></div><div class="tw"><table data-ph="act"><tr><th class="ck"><input type="checkbox" class="rkall"></th><th>Fase</th><th>Aktivitas</th><th>Planned (mulai → selesai)</th><th>Actual (mulai → selesai)</th><th>Durasi</th><th>Status</th><th>Keterangan</th><th></th></tr>'+
  (S.power.activities.map(a=>'<tr data-id="'+a.activity_id+'"><td class="ck"><input type="checkbox" class="rk"></td><td>'+esc(a.phase)+'</td><td>'+esc(a.activity_name)+'</td><td>'+esc(a.planned_datetime)+(a.planned_end?' → '+esc(a.planned_end):'')+'</td><td>'+esc(a.actual_datetime)+(a.actual_end?' → '+esc(a.actual_end):'')+'</td><td>'+(dur(a.planned_datetime,a.planned_end)||dur(a.actual_datetime,a.actual_end))+'</td><td>'+bdg(a.status_eff)+'</td><td>'+esc(a.remark)+'</td><td><button class="ib" data-act="'+a.activity_id+'" title="Edit">✎</button></td></tr>').join('')||'<tr><td colspan="9">'+empty('Belum ada aktivitas. Klik grafik atau "+ Aktivitas".')+'</td></tr>')+'</table></div></div>';
@@ -1054,8 +1084,8 @@ function addDlg(pre){pre=pre||{};const dl='<datalist id="acl">'+ACTS.map(x=>'<op
    rerender();toast('Tersimpan');});
  $('x_k').onchange=()=>{const a=gv('x_k')!=='Titik power';$('x_p').style.display=a?'none':'';$('x_a').style.display=a?'':'none';};}
 function ptEdit(r){if(!r)return;modal('Edit titik · '+r.phase,inp('e_d','Schedule DateTime',toI(r.schedule_datetime),'datetime-local')+inp('e_pw','Planned Power (MW)',r.planned_power,'number')+inp('e_g','Planned GHE (kWh/t)',r.planned_ghe,'number')+
-  inp('e_ad','Actual DateTime',toI(r.actual_datetime),'datetime-local')+inp('e_ap','Actual Power (MW)',r.actual_power,'number')+inp('e_ag','Actual GHE (kWh/t)',r.actual_ghe,'number')+fld('','Keterangan','<textarea id="e_r" rows="3">'+esc(r.remark)+'</textarea>'),
-  async()=>{await call('savePower',{row:{schedule_id:r.schedule_id,schedule_datetime:toS(gv('e_d')),planned_power:gv('e_pw'),planned_ghe:gv('e_g'),actual_datetime:toS(gv('e_ad')),actual_power:gv('e_ap'),actual_ghe:gv('e_ag'),remark:gv('e_r')}});rerender();toast('Tersimpan');});}
+  inp('e_ap','Actual Power (MW)',r.actual_power,'number')+inp('e_ag','Actual GHE (kWh/t)',r.actual_ghe,'number')+fld('','Keterangan','<textarea id="e_r" rows="3">'+esc(r.remark)+'</textarea>'),
+  async()=>{await call('savePower',{row:{schedule_id:r.schedule_id,schedule_datetime:toS(gv('e_d')),planned_power:gv('e_pw'),planned_ghe:gv('e_g'),actual_datetime:'',actual_power:gv('e_ap'),actual_ghe:gv('e_ag'),remark:gv('e_r')}});rerender();toast('Tersimpan');});}
 function actDlg(a){a=a||{};modal(a.activity_id?'Edit aktivitas':'Aktivitas baru',sel('a_ph','Fase',['Ramp Down','Ramp Up','Both'],a.phase||'Ramp Down')+
  fld('','Nama aktivitas','<input id="a_n" list="acl" value="'+esc(a.activity_name||'')+'"><datalist id="acl">'+ACTS.map(x=>'<option>'+x).join('')+'</datalist>')+
  inp('a_p','Planned mulai',toI(a.planned_datetime)||(a.activity_id?'':hr0()),'datetime-local')+inp('a_pe','Planned selesai (opsional · aktivitas berdurasi)',toI(a.planned_end),'datetime-local')+
@@ -1083,7 +1113,7 @@ function chartHTML0(){
  if(!sc.length)return empty('Tanggal pada jadwal power tidak terbaca. Pastikan Code.gs terbaru sudah di-deploy sebagai versi baru, lalu muat ulang halaman.');
  if(S.coffSid!==S.sid){S.coffSid=S.sid;try{S.coff=JSON.parse(localStorage.getItem('fsm_co_'+S.sid)||'{}');}catch(e){S.coff={};}}
  const cv=S.cv,W=960,H=364,L=50,Rr=16,T=34,B=66,col={'Ramp Down':'var(--rd)','Ramp Up':'var(--ru)'};S.pts=[];
- const times=[];sc.forEach(r=>{times.push(+D(r.schedule_datetime));if(r.actual_datetime)times.push(+D(r.actual_datetime));});
+ const times=[];sc.forEach(r=>{times.push(+D(r.schedule_datetime));});
  ac.forEach(a=>['planned_datetime','planned_end','actual_datetime','actual_end'].forEach(k=>{if(a[k])times.push(+D(a[k]));}));
  const tf=times.filter(okT),t0=Math.min(...tf),t1=Math.max(...tf)||t0+1,pw=sc.flatMap(r=>[N(r.planned_power),N(r.actual_power)]).filter(v=>!isNaN(v)),pm=Math.max(1,...pw),stp=[1,2,5,10,20,25,50,100,200,500].find(q=>pm*1.08/q<=7)||Math.pow(10,Math.ceil(Math.log10(pm*1.08/7))),ym=Math.ceil(pm*1.08/stp)*stp;
  S.cm={t0,t1,ym,W,H,L,Rr,T,B};
@@ -1104,7 +1134,7 @@ function chartHTML0(){
   return rotL?'<text transform="translate('+(lx+3)+','+(da?ly-7:ly+7)+') rotate(-90)" text-anchor="'+(da?'start':'end')+'" '+fs+'>'+v+'</text>':'<text x="'+lx+'" y="'+(da?ly-7:ly+15)+'" text-anchor="middle" '+fs+'>'+v+'</text>';};
  PHASES.forEach(ph=>{const R2=sc.filter(r=>r.phase===ph);if(!R2.length)return;const a=Math.min(...R2.map(r=>+D(r.schedule_datetime))),b=Math.max(...R2.map(r=>+D(r.schedule_datetime)));
   s+='<rect x="'+X(a)+'" y="'+T+'" width="'+Math.max(X(b)-X(a),2)+'" height="'+(H-T-B)+'" fill="'+col[ph]+'" opacity=".08"/><text x="'+(X(a)+4)+'" y="'+(H-B-6)+'" font-size="12" font-weight="600" fill="'+col[ph]+'">'+ph+'</text>';
-  [['planned_power','schedule_datetime','planned_ghe','Planned',cv.p],['actual_power','actual_datetime','actual_ghe','Actual',cv.a]].forEach(([pk,tk,gk,lb,on])=>{if(!on)return;const da=lb==='Planned';
+  [['planned_power','schedule_datetime','planned_ghe','Planned',cv.p],['actual_power','schedule_datetime','actual_ghe','Actual',cv.a]].forEach(([pk,tk,gk,lb,on])=>{if(!on)return;const da=lb==='Planned';
    const pts=R2.filter(r=>!isNaN(N(r[pk]))).map(r=>[+D(r[tk]||r.schedule_datetime),N(r[pk]),r]).filter(p=>isFinite(p[0])).sort((x,y)=>x[0]-y[0]);if(!pts.length)return;
    s+='<path d="'+pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('')+'" fill="none" stroke="'+col[ph]+'" stroke-width="2.4" '+(da?'stroke-dasharray="5 4"':'')+'/>'+
    pts.map(p=>{S.pts.push({x:X(p[0]),y:Y(p[1]),k:'p',id:p[2].schedule_id,t:'<b>'+ph+' · '+lb+'</b><br>'+esc(p[2][tk]||p[2].schedule_datetime)+'<br>'+f2(p[1])+' MW'+(p[2][gk]?' · GHE '+esc(p[2][gk])+' kWh/t':'')+(p[2].remark?'<br>'+esc(p[2].remark):'')});
@@ -1129,7 +1159,7 @@ function chartHTML0(){
    ln.map((l,j)=>'<text x="'+(bx+6)+'" y="'+(by+13+j*12)+'" font-size="10" fill="var(--tx)">'+esc(l)+'</text>').join('')+'</g></g>';});
  s+='<line class="xh" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--tx)" stroke-width="1" style="display:none"/><circle class="cdot" r="6" fill="none" stroke="var(--tx)" stroke-width="2" style="display:none"/></svg><div class="tip"></div>';
  const ck=(k,l)=>'<label><input type="checkbox" '+(cv[k]?'checked':'')+' onchange="cvT(\''+k+'\',this.checked)">'+l+'</label>';
- return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4" stroke-dasharray="5 4"/></svg><b>PLAN</b> (garis putus-putus)')+ck('a','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4"/></svg><b>ACTUAL</b> (garis penuh)')+ck('k','Aktivitas')+ck('n','Keterangan (callout)')+ck('v','Callout angka power tiap titik')+'<button type="button" class="b alt sm" onclick="coMode()" style="margin-left:8px">＋ Callout</button></div><div class="mute" style="font-size:12px;margin-top:4px">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Warna = fase (oranye Ramp Down, biru Ramp Up); putus-putus = Plan, penuh = Actual. Klik titik atau aktivitas yang ada untuk mengubah keterangannya. Kotak keterangan bisa digeser (klik 2x untuk reset).</div>';}
+ return s+'<div class="legend"><span><i style="border-color:var(--rd)"></i>Ramp Down</span><span><i style="border-color:var(--ru)"></i>Ramp Up</span>'+ck('p','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4" stroke-dasharray="5 4"/></svg><b>PLAN</b> (garis putus-putus)')+ck('a','<svg width="32" height="8" style="vertical-align:middle;margin:0 5px"><line x1="0" y1="4" x2="32" y2="4" stroke="currentColor" stroke-width="2.4"/></svg><b>ACTUAL</b> (garis penuh)')+hin('ch1','<div class="copts">'+ck('k','Aktivitas')+ck('n','Keterangan (callout) di grafik')+ck('v','Angka power di tiap titik')+'<button type="button" class="b alt sm" onclick="coMode()">＋ Callout</button></div><div class="mu2">💡 Klik di grafik untuk menambah titik power / aktivitas (waktu &amp; power terisi dari posisi klik). Warna = fase (oranye Ramp Down, biru Ramp Up); putus-putus = Plan, penuh = Actual. Klik titik atau aktivitas yang ada untuk mengubah keterangannya. Kotak keterangan bisa digeser (klik 2x untuk reset).</div>')+'</div>';}
 function bindChart(box){const svg=box.querySelector('svg');if(!svg)return;const tip=box.querySelector('.tip'),xh=svg.querySelector('.xh'),dot=svg.querySelector('.cdot');svg.style.cursor='crosshair';
  const hide=()=>{tip.style.display='none';xh.style.display='none';dot.style.display='none';};
  svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*960,sy=(e.clientY-r.top)/r.height*(S.cm?S.cm.H:364);let b=null,bd=1e9;
@@ -1164,7 +1194,7 @@ function calcRange(f,t){const a=+D(f),b=+D(t);if(!isFinite(a)||!isFinite(b)||b<=
  return{P,A,cov,miss,tot:(b-a)/36e5,rows};}
 function calcCard(){const g=S.cc=S.cc||{};
  if(!g.f){const t=S.power.schedule.map(r=>r.schedule_datetime).filter(x=>x&&isFinite(+D(x))).sort()[0],ms=t?+D(t):Date.now();g.f=fdt(ms);g.t=fdt(ms+288e5);}
- return '<div class="card"><h2>Kalkulator Calcine</h2><div class="help">Pilih rentang waktu: dihitung kebutuhan calcine (t/h × jam) dari jadwal power &amp; GHE yang ada.</div><div class="tb fgrp"><label>Dari <input type="datetime-local" id="cc_f" value="'+g.f+'"></label><label>Sampai <input type="datetime-local" id="cc_t" value="'+g.t+'"></label></div><div id="cc_r"></div></div>';}
+ return '<div class="card"><div class="tb" style="margin:0 0 8px"><h2 style="margin:0">Kalkulator Calcine</h2>'+hin('cc1','Pilih rentang waktu: dihitung kebutuhan calcine (t/h × jam) dari jadwal power &amp; GHE yang ada.')+'</div><div class="tb fgrp"><label>Dari <input type="datetime-local" id="cc_f" value="'+g.f+'"></label><label>Sampai <input type="datetime-local" id="cc_t" value="'+g.t+'"></label></div><div id="cc_r"></div></div>';}
 function drawCalc(){const e=$('cc_r');if(!e||!S.cc)return;const r=calcRange(S.cc.f,S.cc.t);
  if(!r){e.innerHTML='<div class="mute">Isi rentang waktu dengan benar (Sampai harus setelah Dari).</div>';return;}
  e.innerHTML='<div class="ph2"><div class="phc" style="--c:var(--rd)"><span class="mute">Kebutuhan calcine PLAN</span><div><b>'+f2(r.P)+'</b> ton</div></div><div class="phc" style="--c:var(--ru)"><span class="mute">ACTUAL</span><div><b>'+f2(r.A)+'</b> ton</div></div><div class="phc" style="--c:var(--ok)"><span class="mute">Rata-rata plan · durasi</span><div><b>'+f2(r.cov?r.P/r.cov:NaN)+'</b> t/h · '+f2(r.tot)+' jam</div></div></div>'+
@@ -1347,7 +1377,7 @@ async function exportXlsx(){await run(async()=>{
  const wb=XLSX.utils.book_new(),add=(n,r)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r.length?r:[{'(kosong)':''}]),n);
  add('Maintenance',d.tasks.map(t=>{const o={'Task ID':t.task_id,'Work Description':t.description,'PIC':t.pic,'Planned Start':t.planned_start,'Planned Finish':t.planned_finish,'Duration (h)':nm(t.planned_duration_h),'Actual Start':t.actual_start,'Actual Finish':t.actual_finish,'Progress (%)':nm(t.progress),'Status':t.status,'Deadline':t.deadline,'Remark':t.remark,'Last Updated':t.last_updated,'Updated By':t.updated_by,'Archived':t.archived==='Y'?'Ya':''};fs.forEach(f=>o[f.field_name]=t.custom[f.field_id]||'');return o;}));
  add('Maintenance Log',d.log.map(l=>({'Task ID':l.task_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value,'Remark':l.remark})));
- add('Power Schedule',d.schedule.map(r=>({'Phase':r.phase,'Plan DateTime':r.schedule_datetime,'Plan Power (MW)':nm(r.planned_power),'Plan GHE (kWh/t)':nm(r.planned_ghe),'Actual DateTime':r.actual_datetime,'Actual Power (MW)':nm(r.actual_power),'Actual GHE (kWh/t)':nm(r.actual_ghe),'Delta Power':(r.actual_power===''||r.planned_power==='')?'':Number(r.actual_power)-Number(r.planned_power),'Delta GHE':(r.actual_ghe===''||r.planned_ghe==='')?'':Number(r.actual_ghe)-Number(r.planned_ghe),'Remark':r.remark,'Updated By':r.updated_by,'Updated At':r.updated_at})));
+ add('Power Schedule',d.schedule.map(r=>({'Phase':r.phase,'Plan DateTime':r.schedule_datetime,'Plan Power (MW)':nm(r.planned_power),'Plan GHE (kWh/t)':nm(r.planned_ghe),'Actual DateTime':(r.actual_power!==''||r.actual_ghe!=='')?r.schedule_datetime:'','Actual Power (MW)':nm(r.actual_power),'Actual GHE (kWh/t)':nm(r.actual_ghe),'Delta Power':(r.actual_power===''||r.planned_power==='')?'':Number(r.actual_power)-Number(r.planned_power),'Delta GHE':(r.actual_ghe===''||r.planned_ghe==='')?'':Number(r.actual_ghe)-Number(r.planned_ghe),'Remark':r.remark,'Updated By':r.updated_by,'Updated At':r.updated_at})));
  add('Calcine Interval',d.intervals.map(i=>({'Phase':i.phase,'Start':i.start_datetime,'End':i.end_datetime,'Duration (h)':nm(i.duration_h),'Planned Calcine (t/h)':nm(i.planned_calcine),'Actual Calcine (t/h)':nm(i.actual_calcine),'Planned Calcine (ton)':i.planned_calcine===''?'':Number(i.planned_calcine)*Number(i.duration_h),'Actual Calcine (ton)':i.actual_calcine===''?'':Number(i.actual_calcine)*Number(i.duration_h),'Status':i.calc_status,'Formula':i.formula_version,'Planned mode':i.planned_calcine_mode||'Auto','Actual mode':i.actual_calcine_mode||'Auto'})));
  add('Operational Activities',d.activities.map(a=>({'Phase':a.phase,'Activity':a.activity_name,'Planned':a.planned_datetime,'Planned End':a.planned_end,'Actual':a.actual_datetime,'Actual End':a.actual_end,'Status':a.status_eff,'Remark':a.remark,'Updated By':a.updated_by,'Updated At':a.updated_at})));
  add('Power Log',d.powerlog.map(l=>({'Ref ID':l.schedule_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value})));
@@ -1379,7 +1409,7 @@ const fdm=v=>{const d=String(v||'');return d?d.slice(8,10)+'/'+d.slice(5,7)+' '+
 const fnum=v=>{const n=N(v);return isNaN(n)?'':f2(n);};
 function nowStamp(){const tz={WIB:'Asia/Jakarta',WITA:'Asia/Makassar',WIT:'Asia/Jayapura'}[S.cfg.TZ];try{return new Date().toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:tz})+(S.cfg.TZ?' '+S.cfg.TZ:'');}catch(e){return new Date().toLocaleString();}}
 function printReport(title,html){let p=$('pr');if(!p){p=document.createElement('div');p.id='pr';document.body.appendChild(p);}
- p.innerHTML='<div class="rh"><div><h1>'+esc(title)+'</h1><div class="rs">'+esc(pn(proj().name))+' · dicetak '+esc(nowStamp())+' oleh '+esc(S.by||'-')+'</div></div><div class="rl">🔥 Furnace Shutdown Management</div></div>'+html;
+ p.className=document.documentElement.dataset.theme==='dark'?'dk':'';p.innerHTML='<div class="rh"><div><h1>'+esc(title)+'</h1><div class="rs">'+esc(pn(proj().name))+' · dicetak '+esc(nowStamp())+' oleh '+esc(S.by||'-')+'</div></div><div class="rl">🔥 Furnace Shutdown Management</div></div>'+html;
  const t0=document.title;document.title=title+' - '+pn(proj().name);
  window.onafterprint=()=>{document.title=t0;p.innerHTML='';window.onafterprint=null;};
  toast('Di jendela cetak, pilih tujuan "Simpan sebagai PDF"');setTimeout(()=>window.print(),250);}
@@ -1400,9 +1430,9 @@ function pdfPw(){if(!S.power)return;const sc=S.power.schedule.slice().sort((a,b)
  const svg=($('s-pw')||document).querySelector('.chartbox svg');let h=svg?'<div class="chb">'+svg.outerHTML+'</div>':'';
  h+='<div class="sum">'+PHASES.map(ph=>{const I=S.power.intervals.filter(i=>i.phase===ph),sm=k=>I.reduce((a,i)=>a+(N(i[k])||0)*(N(i.duration_h)||0),0);return '<span>'+ph+': plan <b>'+f2(sm('planned_calcine'))+'</b> ton · actual <b>'+f2(sm('actual_calcine'))+'</b> ton calcine</span>';}).join('')+'<span>Satuan: Power MW · GHE kWh/t · Calcine t/h</span><span>Rumus: '+esc(S.cfg.FORMULA_VERSION||'')+'</span></div>';
  PHASES2.forEach(([ph])=>{const R=sc.filter(r=>r.phase===ph);if(!R.length)return;
-  h+='<h3>'+ph+' · rincian per jam</h3><table><thead><tr><th rowspan="2">No</th><th colspan="6">PLAN</th><th colspan="6">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th rowspan="2">Keterangan</th></tr><tr><th>Tanggal</th><th>Jam</th><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Tanggal</th><th>Jam</th><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Power</th><th>GHE</th><th>Calcine</th></tr></thead><tbody>'+
+  h+='<h3>'+ph+' · rincian per jam</h3><table class="zb"><thead><tr><th rowspan="2">No</th><th rowspan="2">Tanggal</th><th rowspan="2">Jam</th><th colspan="4">PLAN</th><th colspan="4">ACTUAL</th><th colspan="3">SELISIH (Δ)</th><th rowspan="2">Keterangan</th></tr><tr><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Power</th><th>GHE</th><th>Calcine t/h</th><th>Ton</th><th>Power</th><th>GHE</th><th>Calcine</th></tr></thead><tbody>'+
   R.map((r,i)=>{const iv=im[r.schedule_id],du=iv?N(iv.duration_h):NaN,pc=iv?N(iv.planned_calcine):NaN,ac=iv?N(iv.actual_calcine):NaN,dl=(a,b)=>{const d=N(a)-N(b);return isNaN(d)?'':f2(d);};
-   return '<tr><td>'+(i+1)+'</td><td>'+dPart(r.schedule_datetime)+'</td><td>'+tPart(r.schedule_datetime)+'</td><td>'+fnum(r.planned_power)+'</td><td>'+fnum(r.planned_ghe)+'</td><td>'+fnum(pc)+'</td><td>'+fnum(pc*du)+'</td><td>'+dPart(r.actual_datetime)+'</td><td>'+tPart(r.actual_datetime)+'</td><td>'+fnum(r.actual_power)+'</td><td>'+fnum(r.actual_ghe)+'</td><td>'+fnum(ac)+'</td><td>'+fnum(ac*du)+'</td><td>'+dl(r.actual_power,r.planned_power)+'</td><td>'+dl(r.actual_ghe,r.planned_ghe)+'</td><td>'+dl(ac,pc)+'</td><td>'+esc(r.remark||'')+'</td></tr>';}).join('')+'</tbody></table>';});
+   return '<tr><td>'+(i+1)+'</td><td>'+dPart(r.schedule_datetime)+'</td><td>'+tPart(r.schedule_datetime)+'</td><td>'+fnum(r.planned_power)+'</td><td>'+fnum(r.planned_ghe)+'</td><td>'+fnum(pc)+'</td><td>'+fnum(pc*du)+'</td><td>'+fnum(r.actual_power)+'</td><td>'+fnum(r.actual_ghe)+'</td><td>'+fnum(ac)+'</td><td>'+fnum(ac*du)+'</td><td>'+dl(r.actual_power,r.planned_power)+'</td><td>'+dl(r.actual_ghe,r.planned_ghe)+'</td><td>'+dl(ac,pc)+'</td><td>'+esc(r.remark||'')+'</td></tr>';}).join('')+'</tbody></table>';});
  const ac=(S.power.activities||[]).slice().sort((a,b)=>String(a.planned_datetime)<String(b.planned_datetime)?-1:1);
  if(ac.length)h+='<h3>Aktivitas operasional</h3><table><thead><tr><th>Fase</th><th>Aktivitas</th><th>Plan mulai</th><th>Plan selesai</th><th>Actual mulai</th><th>Actual selesai</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>'+ac.map(a=>'<tr><td>'+esc(a.phase)+'</td><td>'+esc(a.activity_name)+'</td><td>'+fdm(a.planned_datetime)+'</td><td>'+fdm(a.planned_end)+'</td><td>'+fdm(a.actual_datetime)+'</td><td>'+fdm(a.actual_end)+'</td><td>'+esc(a.status)+'</td><td>'+esc(a.remark||'')+'</td></tr>').join('')+'</tbody></table>';
  const cl=coList();if(cl.length)h+='<h3>Callout</h3><table><tbody>'+cl.map(c=>'<tr><td class="nw">'+fshort(c.t)+'</td><td>'+Math.round(c.v*10)/10+' MW</td><td>'+esc(c.txt)+'</td></tr>').join('')+'</tbody></table>';
@@ -1420,5 +1450,10 @@ document.addEventListener('change',e=>{const i=e.target;if(!i.classList||!i.clas
 S.leg=localStorage.getItem('fsm_leg')==='1';
 document.addEventListener('click',e=>{if(e.target.id==='legt'){S.leg=!S.leg;try{localStorage.setItem('fsm_leg',S.leg?'1':'0');}catch(x){}drawMt();}});
 {const f=document.createElement('button');f.id='pdfab';f.className='b';f.innerHTML='📄 Export PDF';f.title='Simpan panel yang sedang dibuka sebagai PDF (mengikuti filter aktif) · Ctrl+P';f.onclick=()=>run(()=>pdfExport(),f);document.body.appendChild(f);document.body.dataset.tab=S.tab||'ov';}
+const hin=(k,h)=>'<details class="hin" data-k="'+k+'"'+((S.ho||{})[k]?' open':'')+'><summary title="Petunjuk">!</summary><div class="hinb">'+h+'</div></details>';
+document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('hin'))(S.ho=S.ho||{})[d.dataset.k]=d.open;},true);
+S.sort={k:'finish',d:1};
+document.addEventListener('click',e=>{const th=e.target.closest&&e.target.closest('#mtab th[data-sort]');if(!th)return;const k=th.dataset.sort;S.sort=S.sort.k===k?{k,d:-S.sort.d}:{k,d:1};drawMt();});
+const setStk=()=>document.documentElement.style.setProperty('--stk',((document.getElementById('top')||{}).offsetHeight||112)+'px');setStk();addEventListener('resize',setStk);setTimeout(setStk,600);
 run(boot);
 </script></body></html>
