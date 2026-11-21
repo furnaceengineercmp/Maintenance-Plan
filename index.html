@@ -1387,19 +1387,171 @@ async function doImport(){
   toast(res.imported.added+' titik ditambah, '+res.imported.updated+' diperbarui'+(badDate?' · '+badDate+' baris dilewati (phase/waktu tidak terbaca)':''));}}
 
 /* ---- Export Excel (semua data project aktif) ---- */
+/* ====== Penulis XLSX mandiri: header berwarna, lebar kolom, filter, freeze, rich text, grafik Excel asli ====== */
+const XW=(()=>{
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const clean=s=>String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'');
+const colL=n=>{let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
+const serial=str=>{const m=/^(\d{4})-(\d\d)-(\d\d)(?:[ T](\d\d):(\d\d)(?::(\d\d))?)?$/.exec(String(str));if(!m)return null;return Date.UTC(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0))/864e5+25569;};
+function Styles(){
+ const fonts=[{b:0,i:0,u:0,sz:11,c:null}],fills=[null,'gray125'],borders=[null],fmts=[],xfs=[{f:0,fl:0,bd:0,nf:0,h:null,v:null,w:0,ind:0}];
+ const pushU=(arr,o)=>{const k=JSON.stringify(o);let i=arr.findIndex(x=>JSON.stringify(x)===k);if(i<0){arr.push(o);i=arr.length-1;}return i;};
+ return{xf(o){o=o||{};const f=pushU(fonts,{b:o.b?1:0,i:o.i?1:0,u:o.u?1:0,sz:o.sz||11,c:o.color||null}),fl=o.fill?pushU(fills,o.fill):0,bd=o.border?pushU(borders,{s:o.border,c:o.bcolor||'FFD6DCE4'}):0;
+   let nf=0;if(o.fmt){let j=fmts.indexOf(o.fmt);if(j<0){fmts.push(o.fmt);j=fmts.length-1;}nf=164+j;}
+   return pushU(xfs,{f,fl,bd,nf,h:o.h||null,v:o.v||null,w:o.wrap?1:0,ind:o.indent||0});},
+  xml(){let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+   if(fmts.length)x+='<numFmts count="'+fmts.length+'">'+fmts.map((f,i)=>'<numFmt numFmtId="'+(164+i)+'" formatCode="'+esc(f)+'"/>').join('')+'</numFmts>';
+   x+='<fonts count="'+fonts.length+'">'+fonts.map(f=>'<font>'+(f.b?'<b/>':'')+(f.i?'<i/>':'')+(f.u?'<u/>':'')+'<sz val="'+f.sz+'"/><color rgb="'+(f.c||'FF000000')+'"/><name val="Calibri"/><family val="2"/></font>').join('')+'</fonts>';
+   x+='<fills count="'+fills.length+'">'+fills.map(f=>f===null?'<fill><patternFill patternType="none"/></fill>':f==='gray125'?'<fill><patternFill patternType="gray125"/></fill>':'<fill><patternFill patternType="solid"><fgColor rgb="'+f+'"/><bgColor indexed="64"/></patternFill></fill>').join('')+'</fills>';
+   x+='<borders count="'+borders.length+'">'+borders.map(b=>b===null?'<border><left/><right/><top/><bottom/><diagonal/></border>':'<border>'+['left','right','top','bottom'].map(s=>'<'+s+' style="'+b.s+'"><color rgb="'+b.c+'"/></'+s+'>').join('')+'<diagonal/></border>').join('')+'</borders>';
+   x+='<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>';
+   x+='<cellXfs count="'+xfs.length+'">'+xfs.map(o=>'<xf numFmtId="'+o.nf+'" fontId="'+o.f+'" fillId="'+o.fl+'" borderId="'+o.bd+'" xfId="0"'+(o.nf?' applyNumberFormat="1"':'')+(o.f?' applyFont="1"':'')+(o.fl?' applyFill="1"':'')+(o.bd?' applyBorder="1"':'')+((o.h||o.v||o.w||o.ind)?' applyAlignment="1"><alignment'+(o.h?' horizontal="'+o.h+'"':'')+(o.v?' vertical="'+o.v+'"':'')+(o.w?' wrapText="1"':'')+(o.ind?' indent="'+o.ind+'"':'')+'/></xf>':'/>')).join('')+'</cellXfs>';
+   return x+'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';}};}
+const runXml=r=>'<r><rPr>'+(r.b?'<b/>':'')+(r.i?'<i/>':'')+(r.u?'<u/>':'')+'<sz val="'+(r.sz||11)+'"/><color rgb="'+(r.c||'FF1F2937')+'"/><rFont val="Calibri"/><family val="2"/></rPr><t xml:space="preserve">'+esc(clean(r.t))+'</t></r>';
+function cellXml(ref,c){if(c==null)return '';const s=c.s?' s="'+c.s+'"':'';
+ if(c.runs)return '<c r="'+ref+'"'+s+' t="inlineStr"><is>'+c.runs.map(runXml).join('')+'</is></c>';
+ if(typeof c.v==='number'&&isFinite(c.v))return '<c r="'+ref+'"'+s+'><v>'+c.v+'</v></c>';
+ if(c.v===undefined||c.v===null||c.v==='')return '<c r="'+ref+'"'+s+'/>';
+ return '<c r="'+ref+'"'+s+' t="inlineStr"><is><t xml:space="preserve">'+esc(clean(c.v))+'</t></is></c>';}
+function sheetXml(sp){let rows=sp.rows,maxC=0;rows.forEach(r=>{if(r&&r.length>maxC)maxC=r.length;});
+ let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+ x+='<sheetPr>'+(sp.tab?'<tabColor rgb="'+sp.tab+'"/>':'')+'<pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:'+colL(Math.max(maxC,1)-1)+Math.max(rows.length,1)+'"/>';
+ x+='<sheetViews><sheetView'+(sp.grid===false?' showGridLines="0"':'')+(sp.sel?' tabSelected="1"':'')+' workbookViewId="0">'+(sp.freeze?'<pane ySplit="'+sp.freeze+'" topLeftCell="A'+(sp.freeze+1)+'" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A'+(sp.freeze+1)+'" sqref="A'+(sp.freeze+1)+'"/>':'')+'</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>';
+ if(sp.cols&&sp.cols.length)x+='<cols>'+sp.cols.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols>';
+ x+='<sheetData>'+rows.map((r,ri)=>{const ht=sp.heights&&sp.heights[ri];return '<row r="'+(ri+1)+'"'+(ht?' ht="'+ht+'" customHeight="1"':'')+'>'+(r||[]).map((c,ci)=>cellXml(colL(ci)+(ri+1),c)).join('')+'</row>';}).join('')+'</sheetData>';
+ if(sp.filter)x+='<autoFilter ref="'+sp.filter+'"/>';
+ if(sp.merges&&sp.merges.length)x+='<mergeCells count="'+sp.merges.length+'">'+sp.merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>';
+ x+='<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>';
+ if(sp.drawing)x+='<drawing r:id="rId1"/>';return x+'</worksheet>';}
+const STAT={'Completed':['FFD3F9D8','FF1E7B34'],'Ongoing':['FFD0EBFF','FF1864AB'],'Not Started':['FFE9ECEF','FF495057'],'Overdue':['FFFFE0E0','FFC92A2A'],'Approaching':['FFFFE8CC','FFD9480F'],'On Schedule':['FFE6FCF5','FF0B7285'],'Ya':['FFFFF3BF','FF8F5E00']};
+function table(aoa,o,st){const head=o.head||'FF374151',hs=st.xf({b:1,color:'FFFFFFFF',fill:head,h:'center',v:'center',wrap:1,border:'thin',bcolor:'FFFFFFFF'}),H=aoa[0]||[],n=H.length;
+ const wrapRe=/desc|remark|activity|keterangan|^old$|^new$|^field$/i,rows=[H.map(h=>({v:h,s:hs}))],width=H.map(h=>Math.max(9,Math.min(40,String(h).length*1.15+4)));
+ for(let i=1;i<aoa.length;i++){const z=i%2===0?'FFF5F7FA':null,row=[];
+  for(let j=0;j<n;j++){let v=aoa[i][j];const hn=String(H[j]),wr=wrapRe.test(hn);let c;
+   if(v===''||v==null)c={s:st.xf({border:'thin',fill:z,v:'top'})};
+   else if(typeof v==='number')c={v,s:st.xf({border:'thin',fill:z,v:'top',h:/progress/i.test(hn)?'center':null,fmt:/progress/i.test(hn)?'0"%"':null})},width[j]=Math.max(width[j],String(v).length+3);
+   else{const sd=serial(v);
+    if(sd!==null){c={v:sd,s:st.xf({border:'thin',fill:z,v:'top',h:'left',fmt:'yyyy-mm-dd hh:mm'})};width[j]=Math.max(width[j],18);}
+    else if(/^(Status|Deadline|Archived)$/i.test(hn)&&STAT[v]){const p=STAT[v];c={v,s:st.xf({border:'thin',fill:p[0],color:p[1],b:1,v:'top',h:'center'})};width[j]=Math.max(width[j],String(v).length+4);}
+    else{const t=clean(v),ml=Math.max(...t.split('\n').map(x=>x.length));c={v:t,s:st.xf({border:'thin',fill:z,v:'top',wrap:wr||t.indexOf('\n')>=0})};width[j]=Math.max(width[j],Math.min(wr?58:40,ml+3));}}
+   row.push(c);}
+  rows.push(row);}
+ return{rows,cols:width.map(w=>Math.round(w*10)/10),heights:{0:30},freeze:1,filter:'A1:'+colL(Math.max(n,1)-1)+Math.max(aoa.length,1),tab:o.tab||head};}
+const NAMED={red:'FFD62839',green:'FF2B9348',blue:'FF1C7ED6',black:'FF000000',orange:'FFE8590C',yellow:'FFB58900',purple:'FF7048E8',gray:'FF666666',grey:'FF666666',white:'FF000000'};
+function argb(v){v=String(v||'').trim().toLowerCase();let m;if(NAMED[v])return NAMED[v];
+ if((m=/^#([0-9a-f]{6})$/.exec(v)))return 'FF'+m[1].toUpperCase();if((m=/^#([0-9a-f]{3})$/.exec(v)))return 'FF'+m[1].split('').map(c=>c+c).join('').toUpperCase();
+ if((m=/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(v)))return 'FF'+[m[1],m[2],m[3]].map(x=>(+x).toString(16).padStart(2,'0')).join('').toUpperCase();return null;}
+const ent=s=>s.replace(/&nbsp;/g,' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&#(\d+);/g,(a,d)=>String.fromCharCode(+d)).replace(/&amp;/g,'&');
+function htmlRuns(html){const out=[],stack=[],re=/<(\/?)([a-zA-Z0-9]+)([^>]*)>|([^<]+)/g,src=String(html||'').replace(/<!--[\s\S]*?-->/g,'');let m;
+ const cur=()=>{const o={b:0,i:0,u:0,c:null};stack.forEach(s=>{if(s.b)o.b=1;if(s.i)o.i=1;if(s.u)o.u=1;if(s.c)o.c=s.c;});return o;};
+ const nl=()=>{if(out.length&&!/\n$/.test(out[out.length-1].t))out.push(Object.assign(cur(),{t:'\n'}));};
+ while((m=re.exec(src))){
+  if(m[4]!==undefined){const t=ent(m[4]).replace(/[\r\n]+/g,' ');if(t)out.push(Object.assign(cur(),{t}));continue;}
+  const close=m[1]==='/',tag=m[2].toLowerCase(),attr=m[3]||'';
+  if(tag==='br'){out.push(Object.assign(cur(),{t:'\n'}));continue;}
+  if(tag==='div'||tag==='p'){nl();continue;}
+  if(close){if(stack.length&&stack[stack.length-1].tag===tag)stack.pop();continue;}
+  const s={tag};if(tag==='b'||tag==='strong')s.b=1;if(tag==='i'||tag==='em')s.i=1;if(tag==='u')s.u=1;
+  const sm=/style="([^"]*)"/.exec(attr);if(sm){const st=sm[1];if(/font-weight:\s*(bold|[6-9]00)/i.test(st))s.b=1;if(/font-style:\s*italic/i.test(st))s.i=1;if(/text-decoration[^;]*underline/i.test(st))s.u=1;const cm=/(?:^|;)\s*color:\s*([^;]+)/i.exec(st);if(cm)s.c=argb(cm[1]);}
+  const fm=/color="([^"]*)"/.exec(attr);if(tag==='font'&&fm)s.c=argb(fm[1]);
+  if(!/\/\s*$/.test(attr))stack.push(s);}
+ while(out.length&&/^\s*$/.test(out[out.length-1].t))out.pop();if(out.length)out[out.length-1].t=out[out.length-1].t.replace(/\n+$/,'');
+ return out;}
+const nice=pm=>{const q=[1,2,5,10,20,25,50,100,200,500].find(s=>pm*1.08/s<=7)||Math.pow(10,Math.ceil(Math.log10(pm*1.08/7)));return{step:q,max:Math.ceil(pm*1.08/q)*q};};
+function chartXml(ch){const ser=ch.series.map((s,i)=>{const pts=(a)=>a.map((v,k)=>v==null?'':'<c:pt idx="'+k+'"><c:v>'+v+'</c:v></c:pt>').join('');
+  return '<c:ser><c:idx val="'+i+'"/><c:order val="'+i+'"/><c:tx><c:v>'+esc(s.name)+'</c:v></c:tx><c:spPr><a:ln w="28575" cap="rnd"><a:solidFill><a:srgbClr val="'+s.color+'"/></a:solidFill>'+(s.dash?'<a:prstDash val="dash"/>':'')+'<a:round/></a:ln></c:spPr>'+
+  '<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="'+(s.dash?'FFFFFF':s.color)+'"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="'+s.color+'"/></a:solidFill></a:ln></c:spPr></c:marker>'+
+  '<c:xVal><c:numRef><c:f>'+s.xRef+'</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="'+s.xs.length+'"/>'+pts(s.xs)+'</c:numCache></c:numRef></c:xVal>'+
+  '<c:yVal><c:numRef><c:f>'+s.yRef+'</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="'+s.ys.length+'"/>'+pts(s.ys)+'</c:numCache></c:numRef></c:yVal><c:smooth val="0"/></c:ser>';}).join('');
+ const tx=(sz,b)=>'<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="'+sz+'" b="'+(b?1:0)+'"><a:solidFill><a:srgbClr val="404A57"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>';
+ return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:roundedCorners val="0"/><c:chart>'+
+ '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1400" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1400" b="1"/><a:t>'+esc(ch.title)+'</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>'+
+ '<c:plotArea><c:layout/><c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>'+ser+'<c:axId val="50010001"/><c:axId val="50010002"/></c:scatterChart>'+
+ '<c:valAx><c:axId val="50010001"/><c:scaling><c:orientation val="minMax"/><c:max val="'+ch.xmax+'"/><c:min val="'+ch.xmin+'"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E3E7EC"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="0"/></a:pPr><a:r><a:rPr lang="en-US" sz="1000" b="0"/><a:t>Tanggal / jam</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="'+esc(ch.xfmt)+'" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/><c:txPr><a:bodyPr rot="-2700000" vert="horz"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"><a:solidFill><a:srgbClr val="404A57"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr><c:crossAx val="50010002"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/><c:majorUnit val="'+ch.xunit+'"/></c:valAx>'+
+ '<c:valAx><c:axId val="50010002"/><c:scaling><c:orientation val="minMax"/><c:max val="'+ch.ymax+'"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E3E7EC"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:title><c:tx><c:rich><a:bodyPr rot="-5400000" vert="horz"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="0"/></a:pPr><a:r><a:rPr lang="en-US" sz="1000" b="0"/><a:t>Power (MW)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>'+tx(900,0)+'<c:crossAx val="50010001"/><c:crosses val="min"/><c:crossBetween val="midCat"/><c:majorUnit val="'+ch.ystep+'"/></c:valAx>'+
+ '<c:spPr><a:noFill/></c:spPr></c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/>'+tx(1000,0)+'</c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="CBD2DA"/></a:solidFill></a:ln></c:spPr></c:chartSpace>';}
+function drawingXml(a){return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><xdr:twoCellAnchor><xdr:from><xdr:col>'+a.c0+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+a.r0+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>'+a.c1+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+a.r1+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Grafik Power"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>';}
+function dashboard(d,st){const NC=12,rows=[],heights={},merges=[],S=(o)=>st.xf(o);
+ const put=(r,c,cell)=>{(rows[r]=rows[r]||[])[c]=cell;},bar=(r,text,color)=>{const s=S({b:1,sz:12,color:'FFFFFFFF',fill:color||'FF1F2937',v:'center',indent:1});for(let c=0;c<NC;c++)put(r,c,{s});put(r,0,{v:text,s});merges.push('A'+(r+1)+':L'+(r+1));heights[r]=22;};
+ const t=S({b:1,sz:16,color:'FFFFFFFF',fill:'FF111827',v:'center',indent:1});for(let c=0;c<NC;c++)put(0,c,{s:t});put(0,0,{v:d.title,s:t});merges.push('A1:L1');heights[0]=34;
+ const sb=S({i:1,sz:10,color:'FF5B6675',v:'center',indent:1});put(1,0,{v:d.sub,s:sb});merges.push('A2:L2');heights[1]=20;heights[2]=6;
+ d.kpis.forEach((k,i)=>{const c=i*2,l=S({b:1,sz:10,color:'FFFFFFFF',fill:k.c,h:'center',v:'center'}),v=S({b:1,sz:20,color:k.c,fill:'FFF5F7FA',h:'center',v:'center',border:'thin',bcolor:k.c});put(3,c,{v:k.l,s:l});put(3,c+1,{s:l});put(4,c,{v:k.v,s:v});put(4,c+1,{s:v});merges.push(colL(c)+'4:'+colL(c+1)+'4',colL(c)+'5:'+colL(c+1)+'5');});
+ heights[3]=20;heights[4]=36;heights[5]=8;bar(6,'POWER vs TIME  (grafik Excel asli — bersumber dari tabel "Data grafik" di bawah)','FFE8590C');
+ const CH0=7,CH1=31;let r=32;heights[31]=8;
+ const noteBlock=(title,runs,color)=>{bar(r,title,color);r++;const txt=runs.map(x=>x.t).join(''),lines=txt.split('\n').reduce((a,p)=>a+Math.max(1,Math.ceil(p.length/135)),0),ns=S({v:'top',wrap:1,border:'thin',bcolor:'FFCBD2DA',fill:'FFFFFFFF',indent:1});
+  for(let c=0;c<NC;c++)put(r,c,{s:ns});put(r,0,runs.length?{runs,s:ns}:{runs:[{t:'(belum ada catatan)',i:1,c:'FF8A94A0'}],s:ns});merges.push('A'+(r+1)+':L'+(r+1));heights[r]=Math.min(409,Math.max(32,lines*15+10));r++;heights[r]=8;r++;};
+ noteBlock('CATATAN OPERASI (Power)',d.noteOp,'FF2B9348');noteBlock('CATATAN MAINTENANCE',d.noteMt,'FF1C7ED6');
+ bar(r,'TOTAL CALCINE PER FASE','FF374151');r++;const th=S({b:1,color:'FFFFFFFF',fill:'FF374151',h:'center',v:'center',border:'thin',bcolor:'FFFFFFFF'});
+ [['Fase',0],['Plan (ton)',4],['Actual (ton)',8]].forEach(([l,c])=>{for(let k=0;k<4;k++)put(r,c+k,{s:th});put(r,c,{v:l,s:th});merges.push(colL(c)+(r+1)+':'+colL(c+3)+(r+1));});r++;
+ d.totals.forEach(tt=>{const b=S({b:1,color:tt.color,border:'thin',v:'center',h:'center'}),nb=S({border:'thin',h:'center',v:'center',fmt:'#,##0.00'});
+  [[tt.phase,0,b],[tt.plan,4,nb],[tt.actual,8,nb]].forEach(([v,c,s])=>{for(let k=0;k<4;k++)put(r,c+k,{s});put(r,c,{v,s});merges.push(colL(c)+(r+1)+':'+colL(c+3)+(r+1));});r++;});
+ r++;bar(r,'DATA GRAFIK  (jangan dihapus; dipakai grafik di atas — ubah angkanya untuk memperbarui grafik)','FF6B7280');r++;
+ const series=[],dtF='dd/mm hh:mm';let maxP=1,minX=Infinity,maxX=-Infinity;const hdrRow=r;
+ d.phases.forEach((ph,pi)=>{const c0=pi*4,hh=S({b:1,color:'FFFFFFFF',fill:ph.color,h:'center',v:'center',border:'thin',bcolor:'FFFFFFFF',wrap:1});
+  [ph.name+' · Waktu','Plan (MW)','Actual (MW)'].forEach((l,k)=>put(hdrRow,c0+k,{v:l,s:hh}));
+  const sd=S({border:'thin',fmt:dtF,h:'left'}),sn=S({border:'thin',h:'center'});
+  ph.rows.forEach((x,k)=>{put(hdrRow+1+k,c0,{v:x[0],s:sd});put(hdrRow+1+k,c0+1,x[1]==null?{s:sn}:{v:x[1],s:sn});put(hdrRow+1+k,c0+2,x[2]==null?{s:sn}:{v:x[2],s:sn});
+   minX=Math.min(minX,x[0]);maxX=Math.max(maxX,x[0]);if(x[1]!=null)maxP=Math.max(maxP,x[1]);if(x[2]!=null)maxP=Math.max(maxP,x[2]);});
+  const n=ph.rows.length,a=hdrRow+2,b=hdrRow+1+n,xr='Dashboard!$'+colL(c0)+'$'+a+':$'+colL(c0)+'$'+b;
+  if(n){series.push({name:ph.name+' · Plan',color:ph.hex,dash:1,xRef:xr,yRef:'Dashboard!$'+colL(c0+1)+'$'+a+':$'+colL(c0+1)+'$'+b,xs:ph.rows.map(x=>x[0]),ys:ph.rows.map(x=>x[1])});
+   if(ph.rows.some(x=>x[2]!=null))series.push({name:ph.name+' · Actual',color:ph.hex,dash:0,xRef:xr,yRef:'Dashboard!$'+colL(c0+2)+'$'+a+':$'+colL(c0+2)+'$'+b,xs:ph.rows.map(x=>x[0]),ys:ph.rows.map(x=>x[2])});}});
+ const hrs=(maxX-minX)*24,unit=([1,2,3,4,6,12,24,48,168].find(h=>hrs/h<=18)||336)/24,ny=nice(maxP);
+ const xmin=isFinite(minX)?Math.floor(minX/unit)*unit:0,xmax=isFinite(maxX)?Math.ceil(maxX/unit)*unit:1;
+ const cols=[];for(let c=0;c<NC;c++)cols.push(12.5);
+ return{sp:{rows,heights,merges,cols,grid:false,tab:'FFE8590C',sel:true,drawing:true},series:series.length?{title:d.chartTitle,series,xmin,xmax:xmax>xmin?xmax:xmin+1,xunit:Math.max(unit,1/24),xfmt:unit<1?'dd/mm hh:mm':'dd-mmm',ymax:ny.max,ystep:ny.step}:null,anchor:{c0:0,r0:CH0,c1:NC,r1:CH1}};}
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=crcT[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0;};
+async function deflate(u){return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());}
+async function zip(files){const enc=new TextEncoder(),chunks=[],cd=[];let off=0;
+ for(const f of files){const nm=enc.encode(f.name),raw=f.data;let data=raw,method=0;
+  if(typeof CompressionStream!=='undefined'&&raw.length>256){try{const d=await deflate(raw);if(d.length<raw.length){data=d;method=8;}}catch(e){}}
+  const crc=crc32(raw),h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,method,true);h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,raw.length,true);h.setUint16(26,nm.length,true);
+  chunks.push(new Uint8Array(h.buffer),nm,data);
+  const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,method,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,raw.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+  cd.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+data.length;}
+ const cl=cd.reduce((a,x)=>a+x.length,0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cl,true);e.setUint32(16,off,true);
+ return new Blob([...chunks,...cd,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
+async function build(spec){const st=Styles(),enc=new TextEncoder(),files=[],sheets=[],safe=n=>String(n).replace(/[\[\]:*?\/\\]/g,' ').slice(0,31);let chart=null,anchor=null;
+ if(spec.dash){const d=dashboard(spec.dash,st);sheets.push({name:'Dashboard',sp:d.sp});chart=d.series;anchor=d.anchor;}
+ spec.sheets.forEach(s=>{const t=table(s.aoa,s,st);sheets.push({name:safe(s.name),sp:t});});
+ const ct=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'];
+ sheets.forEach((s,i)=>ct.push('<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'));
+ if(chart)ct.push('<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
+ ct.push('</Types>');const add=(name,xml)=>files.push({name,data:enc.encode(xml)});
+ add('[Content_Types].xml',ct.join(''));
+ add('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+ const dn=[];sheets.forEach((s,i)=>{if(s.sp.filter)dn.push('<definedName name="_xlnm._FilterDatabase" localSheetId="'+i+'" hidden="1">\''+s.name.replace(/\'/g,"''")+'\'!$A$1:$'+s.sp.filter.split(':')[1].replace(/(\d+)$/,'$$$1')+'</definedName>');});
+ add('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="28800" windowHeight="15000" activeTab="0"/></bookViews><sheets>'+sheets.map((s,i)=>'<sheet name="'+esc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets>'+(dn.length?'<definedNames>'+dn.join('')+'</definedNames>':'')+'</workbook>');
+ add('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')+'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+ sheets.forEach((s,i)=>{if(i===0&&spec.dash)s.sp.drawing=!!chart;add('xl/worksheets/sheet'+(i+1)+'.xml',sheetXml(s.sp));});
+ if(chart){add('xl/worksheets/_rels/sheet1.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+  add('xl/drawings/drawing1.xml',drawingXml(anchor));add('xl/drawings/_rels/drawing1.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/></Relationships>');add('xl/charts/chart1.xml',chartXml(chart));}
+ add('xl/styles.xml',st.xml());return zip(files);}
+return{build,htmlRuns,serial,colL};})();
+if(typeof module!=='undefined')module.exports=XW;
+
 async function exportXlsx(){await run(async()=>{
- if(!S.sid)throw new Error('Pilih shutdown project dulu.');if(!window.XLSX)throw new Error('Library Excel belum termuat (cek koneksi internet).');
- const d=await call('exportData',{shutdown_id:S.sid}),fs=pfields(),nm=v=>v===''||v==null||isNaN(Number(v))?(v||''):Number(v);
- const wb=XLSX.utils.book_new(),add=(n,r)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r.length?r:[{'(kosong)':''}]),n);
- add('Maintenance',d.tasks.map(t=>{const o={'Task ID':t.task_id,'Work Description':t.description,'PIC':t.pic,'Planned Start':t.planned_start,'Planned Finish':t.planned_finish,'Duration (h)':nm(t.planned_duration_h),'Actual Start':t.actual_start,'Actual Finish':t.actual_finish,'Progress (%)':nm(t.progress),'Status':t.status,'Deadline':t.deadline,'Remark':t.remark,'Last Updated':t.last_updated,'Updated By':t.updated_by,'Archived':t.archived==='Y'?'Ya':''};fs.forEach(f=>o[f.field_name]=t.custom[f.field_id]||'');return o;}));
- add('Maintenance Log',d.log.map(l=>({'Task ID':l.task_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value,'Remark':l.remark})));
- add('Power Schedule',d.schedule.map(r=>({'Phase':r.phase,'Plan DateTime':r.schedule_datetime,'Plan Power (MW)':nm(r.planned_power),'Plan GHE (kWh/t)':nm(r.planned_ghe),'Actual DateTime':(r.actual_power!==''||r.actual_ghe!=='')?r.schedule_datetime:'','Actual Power (MW)':nm(r.actual_power),'Actual GHE (kWh/t)':nm(r.actual_ghe),'Delta Power':(r.actual_power===''||r.planned_power==='')?'':Number(r.actual_power)-Number(r.planned_power),'Delta GHE':(r.actual_ghe===''||r.planned_ghe==='')?'':Number(r.actual_ghe)-Number(r.planned_ghe),'Remark':r.remark,'Updated By':r.updated_by,'Updated At':r.updated_at})));
- add('Calcine Interval',d.intervals.map(i=>({'Phase':i.phase,'Start':i.start_datetime,'End':i.end_datetime,'Duration (h)':nm(i.duration_h),'Planned Calcine (t/h)':nm(i.planned_calcine),'Actual Calcine (t/h)':nm(i.actual_calcine),'Planned Calcine (ton)':i.planned_calcine===''?'':Number(i.planned_calcine)*Number(i.duration_h),'Actual Calcine (ton)':i.actual_calcine===''?'':Number(i.actual_calcine)*Number(i.duration_h),'Status':i.calc_status,'Formula':i.formula_version,'Planned mode':i.planned_calcine_mode||'Auto','Actual mode':i.actual_calcine_mode||'Auto'})));
- add('Operational Activities',d.activities.map(a=>({'Phase':a.phase,'Activity':a.activity_name,'Planned':a.planned_datetime,'Planned End':a.planned_end,'Actual':a.actual_datetime,'Actual End':a.actual_end,'Status':a.status_eff,'Remark':a.remark,'Updated By':a.updated_by,'Updated At':a.updated_at})));
- add('Power Log',d.powerlog.map(l=>({'Ref ID':l.schedule_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value})));
+ if(!S.sid)throw new Error('Pilih shutdown project dulu.');
+ const d=await call('exportData',{shutdown_id:S.sid}),fs=pfields(),nm=v=>v===''||v==null||isNaN(Number(v))?(v||''):Number(v),sh=[];
+ const A=r=>{const rows=r.length?r:[{'(kosong)':''}],H=Object.keys(rows[0]);return[H].concat(rows.map(o=>H.map(k=>o[k]==null?'':o[k])));},add=(n,r,head)=>sh.push({name:n,aoa:A(r),head});
+ add('Maintenance',d.tasks.map(t=>{const o={'Task ID':t.task_id,'Work Description':t.description,'PIC':t.pic,'Planned Start':t.planned_start,'Planned Finish':t.planned_finish,'Duration (h)':nm(t.planned_duration_h),'Actual Start':t.actual_start,'Actual Finish':t.actual_finish,'Progress (%)':nm(t.progress),'Status':t.status,'Deadline':t.deadline,'Remark':t.remark,'Last Updated':t.last_updated,'Updated By':t.updated_by,'Archived':t.archived==='Y'?'Ya':''};fs.forEach(f=>o[f.field_name]=t.custom[f.field_id]||'');return o;}),'FFE8590C');
+ add('Maintenance Log',d.log.map(l=>({'Task ID':l.task_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value,'Remark':l.remark})),'FF6B7280');
+ add('Power Schedule',d.schedule.map(r=>({'Phase':r.phase,'Plan DateTime':r.schedule_datetime,'Plan Power (MW)':nm(r.planned_power),'Plan GHE (kWh/t)':nm(r.planned_ghe),'Actual DateTime':(r.actual_power!==''||r.actual_ghe!=='')?r.schedule_datetime:'','Actual Power (MW)':nm(r.actual_power),'Actual GHE (kWh/t)':nm(r.actual_ghe),'Delta Power':(r.actual_power===''||r.planned_power==='')?'':Number(r.actual_power)-Number(r.planned_power),'Delta GHE':(r.actual_ghe===''||r.planned_ghe==='')?'':Number(r.actual_ghe)-Number(r.planned_ghe),'Remark':r.remark,'Updated By':r.updated_by,'Updated At':r.updated_at})),'FF1C7ED6');
+ add('Calcine Interval',d.intervals.map(i=>({'Phase':i.phase,'Start':i.start_datetime,'End':i.end_datetime,'Duration (h)':nm(i.duration_h),'Planned Calcine (t/h)':nm(i.planned_calcine),'Actual Calcine (t/h)':nm(i.actual_calcine),'Planned Calcine (ton)':i.planned_calcine===''?'':Number(i.planned_calcine)*Number(i.duration_h),'Actual Calcine (ton)':i.actual_calcine===''?'':Number(i.actual_calcine)*Number(i.duration_h),'Status':i.calc_status,'Formula':i.formula_version,'Planned mode':i.planned_calcine_mode||'Auto','Actual mode':i.actual_calcine_mode||'Auto'})),'FF0B7285');
+ add('Operational Activities',d.activities.map(a=>({'Phase':a.phase,'Activity':a.activity_name,'Planned':a.planned_datetime,'Planned End':a.planned_end,'Actual':a.actual_datetime,'Actual End':a.actual_end,'Status':a.status_eff,'Remark':a.remark,'Updated By':a.updated_by,'Updated At':a.updated_at})),'FF2B9348');
+ add('Power Log',d.powerlog.map(l=>({'Ref ID':l.schedule_id,'Updated By':l.updated_by,'Timestamp':l.timestamp,'Field':l.field_name,'Old':l.old_value,'New':l.new_value})),'FF6B7280');
  {const bk=await call('backupProject',{shutdown_id:S.sid});bk.ui={coff:S.coff||{}};const zz=await gz(JSON.stringify(bk)),CH=30000,n=Math.ceil(zz.length/CH),rr=[['FSM_BACKUP_V1','JANGAN ubah/hapus sheet ini. Dipakai tombol Import Backup (Admin) untuk memulihkan project persis seperti saat diexport.',bk.project.shutdown_id,pn(bk.project.name),bk.exported_at,n]];
-  for(let i=0;i<n;i++)rr.push([zz.slice(i*CH,(i+1)*CH)]);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rr),'_BACKUP');}
- XLSX.writeFile(wb,'Shutdown_'+(pn(proj().name)||'project').replace(/[^\w-]+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');toast('File Excel diunduh · sudah termasuk backup lengkap');});}
+  for(let i=0;i<n;i++)rr.push([zz.slice(i*CH,(i+1)*CH)]);sh.push({name:'_BACKUP',aoa:rr,head:'FF495057'});}
+ /* Dashboard: KPI + grafik Power asli Excel + catatan */
+ const T=S.tasks.filter(t=>t.archived!=='Y'),cn=k=>T.filter(t=>t.status===k).length,cd=k=>T.filter(t=>t.deadline===k).length,avg=T.length?Math.round(T.reduce((a,t)=>a+(Number(t.progress)||0),0)/T.length):0;
+ const ts=d.schedule.map(r=>+D(r.schedule_datetime)).filter(okT),rng=ts.length?fshort(Math.min(...ts))+' – '+fshort(Math.max(...ts)):'-',nt=x=>x?XW.htmlRuns(noteHTML(x)):[],fin=v=>{const n=N(v);return isFinite(n)?n:null;};
+ const PC=[['Ramp Down','E8590C'],['Ramp Up','1C7ED6']],dash={title:'FURNACE SHUTDOWN MANAGEMENT — '+pn(proj().name),sub:'Diexport '+nowStamp()+' oleh '+(S.by||'-')+' · Jadwal power '+rng+' · '+T.length+' task · rata-rata progress '+avg+'%',chartTitle:'Power vs Time — '+pn(proj().name),
+  kpis:[{l:'Total task',v:T.length,c:'FF374151'},{l:'Completed',v:cn('Completed'),c:'FF2B9348'},{l:'Ongoing',v:cn('Ongoing'),c:'FF1C7ED6'},{l:'Not Started',v:cn('Not Started'),c:'FF8A94A0'},{l:'Overdue',v:cd('Overdue'),c:'FFD62839'},{l:'Approaching',v:cd('Approaching'),c:'FFE67700'}],
+  noteOp:nt(S.power&&S.power.note),noteMt:nt(S.power&&S.power.mtnote),
+  totals:PC.map(([p,h])=>({phase:p,color:'FF'+h,plan:d.intervals.filter(i=>i.phase===p).reduce((a,i)=>a+(N(i.planned_calcine)||0)*(N(i.duration_h)||0),0),actual:d.intervals.filter(i=>i.phase===p).reduce((a,i)=>a+(N(i.actual_calcine)||0)*(N(i.duration_h)||0),0)})),
+  phases:PC.map(([p,h])=>({name:p,color:'FF'+h,hex:h,rows:d.schedule.filter(r=>r.phase===p&&XW.serial(r.schedule_datetime)!==null).sort((a,b)=>String(a.schedule_datetime)<String(b.schedule_datetime)?-1:1).map(r=>[XW.serial(r.schedule_datetime),fin(r.planned_power),(r.actual_power===''?null:fin(r.actual_power))])}))};
+ const blob=await XW.build({sheets:sh,dash}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Shutdown_'+(pn(proj().name)||'project').replace(/[^\w-]+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},5000);
+ toast('File Excel diunduh · ada sheet Dashboard (grafik asli), header berwarna, dan backup lengkap');});}
 
 async function gz(t){if(typeof CompressionStream==='undefined')return 'J'+btoa(unescape(encodeURIComponent(t)));const buf=await new Response(new Blob([t]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();let b='';new Uint8Array(buf).forEach(c=>b+=String.fromCharCode(c));return 'Z'+btoa(b);}
 async function gunz(z){const m=z[0],bin=atob(z.slice(1));if(m==='J')return decodeURIComponent(escape(bin));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();}
