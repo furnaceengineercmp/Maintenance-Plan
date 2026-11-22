@@ -115,6 +115,7 @@ input[type=range]{accent-color:var(--rd);cursor:pointer}
 
 #pr{display:none}
 @media print{@page{size:A4 landscape;margin:0}
+ *{animation:none!important;transition:none!important}
  html,body{margin:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  html[data-theme=dark],html[data-theme=dark] body{background:#0d1117!important}
  html[data-theme=light],html[data-theme=light] body{background:#fff!important}
@@ -145,11 +146,11 @@ input[type=range]{accent-color:var(--rd);cursor:pointer}
  #pr .pc{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;font-size:9.5px;margin:1px 3px 1px 0}
  #pr th.gp,#pr th.ga,#pr th.gd{text-align:center;color:#fff;letter-spacing:.5px}
  #pr th.gp{background:var(--rd)}#pr th.ga{background:var(--ru)}#pr th.gd{background:var(--idle)}
- #pr th.sp,#pr th.sa,#pr th.sd{text-align:center}
- #pr th.sp{background:color-mix(in srgb,var(--rd) 26%,var(--pth))}#pr th.sa{background:color-mix(in srgb,var(--ru) 26%,var(--pth))}#pr th.sd{background:color-mix(in srgb,var(--idle) 26%,var(--pth))}
- #pr table.pw tbody td:nth-child(n+4):nth-child(-n+7){background-image:linear-gradient(color-mix(in srgb,var(--rd) 11%,transparent),color-mix(in srgb,var(--rd) 11%,transparent))}
- #pr table.pw tbody td:nth-child(n+8):nth-child(-n+11){background-image:linear-gradient(color-mix(in srgb,var(--ru) 11%,transparent),color-mix(in srgb,var(--ru) 11%,transparent))}
- #pr table.pw tbody td:nth-child(n+12):nth-child(-n+14){background-image:linear-gradient(color-mix(in srgb,var(--idle) 10%,transparent),color-mix(in srgb,var(--idle) 10%,transparent))}
+ #pr th.c1,#pr th.c2,#pr th.c3{text-align:center}
+ #pr th.c1{background:color-mix(in srgb,var(--rd) 26%,var(--pth))}#pr th.c2{background:color-mix(in srgb,var(--ru) 26%,var(--pth))}#pr th.c3{background:color-mix(in srgb,var(--idle) 26%,var(--pth))}
+ #pr{--tp:rgba(232,89,12,.10);--ta:rgba(28,126,214,.10);--td2:rgba(138,148,160,.12)}#pr.dk{--tp:rgba(255,122,61,.16);--ta:rgba(77,171,247,.16);--td2:rgba(123,135,148,.18)}
+ #pr table.pw{table-layout:fixed}#pr table.pw col.cp{background:var(--tp)}#pr table.pw col.ca{background:var(--ta)}#pr table.pw col.cd{background:var(--td2)}
+ #pr table.pw td{overflow-wrap:anywhere}
  #pr table.pw td:nth-child(4),#pr table.pw td:nth-child(8),#pr table.pw td:nth-child(12){border-left:2px solid var(--pmu)}
  #pr table.pw td:nth-child(n+4):nth-child(-n+14){text-align:center}
 }
@@ -1610,11 +1611,12 @@ function pdfPw(){if(!S.power)return;const sc=S.power.schedule.slice().sort((a,b)
  const cc=S.cc&&S.cc.f?calcRange(S.cc.f,S.cc.t):null;
  if(cc){h+='<h3>Kalkulator Calcine · '+fshort(+D(S.cc.f))+' → '+fshort(+D(S.cc.t))+'</h3><div class="sum"><span>Kebutuhan calcine PLAN <b>'+f2(cc.P)+' ton</b></span><span>ACTUAL <b>'+f2(cc.A)+' ton</b></span><span>Rata-rata plan <b>'+f2(cc.cov?cc.P/cc.cov:NaN)+' t/h</b></span><span>Durasi rentang <b>'+f2(cc.tot)+' jam</b></span></div>'+
   (cc.cov<cc.tot-0.01?'<div class="sum"><span>⚠ Hanya '+f2(cc.cov)+' dari '+f2(cc.tot)+' jam yang tercakup titik jadwal power.</span></div>':'')+(cc.miss?'<div class="sum"><span>⚠ '+cc.miss+' interval belum punya Power/GHE, tidak ikut dihitung.</span></div>':'')+
-  '<table class="zb"><thead><tr><th>Fase</th><th>Waktu</th><th>Durasi</th><th class="sp">Plan (t/h)</th><th class="sp">Plan (ton)</th><th class="sa">Actual (t/h)</th><th class="sa">Actual (ton)</th></tr></thead><tbody>'+
+  '<table class="zb"><thead><tr><th>Fase</th><th>Waktu</th><th>Durasi</th><th class="c1">Plan (t/h)</th><th class="c1">Plan (ton)</th><th class="c2">Actual (t/h)</th><th class="c2">Actual (ton)</th></tr></thead><tbody>'+
   (cc.rows.map(x=>'<tr><td>'+esc(x.ph)+'</td><td class="nw">'+fshort(x.s)+' → '+fshort(x.e)+'</td><td>'+f2(x.h)+' j</td><td>'+f2(x.p)+'</td><td>'+f2(x.p*x.h)+'</td><td>'+f2(x.c)+'</td><td>'+f2(x.c*x.h)+'</td></tr>').join('')||'<tr><td colspan="7">Tidak ada interval jadwal pada rentang ini.</td></tr>')+
   '<tr><td colspan="4" style="text-align:right"><b>Total</b></td><td><b>'+f2(cc.P)+'</b></td><td></td><td><b>'+f2(cc.A)+'</b></td></tr></tbody></table>';}
+ const cg=['3.5','8.5','5.5','5.5','5.5','7.5','7','5.5','5.5','7.5','7','5','5','6.5','15'].map((w,i)=>'<col class="'+(i>=3&&i<=6?'cp':i>=7&&i<=10?'ca':i>=11&&i<=13?'cd':'')+'" style="width:'+w+'%">').join('');
  PHASES2.forEach(([ph])=>{const R=sc.filter(r=>r.phase===ph);if(!R.length)return;
-  h+='<h3>'+ph+' · rincian per jam</h3><table class="zb pw"><thead><tr><th rowspan="2">No</th><th rowspan="2">Tanggal</th><th rowspan="2">Jam</th><th colspan="4" class="gp">PLAN</th><th colspan="4" class="ga">ACTUAL</th><th colspan="3" class="gd">SELISIH (Δ)</th><th rowspan="2">Keterangan</th></tr><tr><th class="sp">Power</th><th class="sp">GHE</th><th class="sp">Calcine t/h</th><th class="sp">Ton</th><th class="sa">Power</th><th class="sa">GHE</th><th class="sa">Calcine t/h</th><th class="sa">Ton</th><th class="sd">Power</th><th class="sd">GHE</th><th class="sd">Calcine</th></tr></thead><tbody>'+
+  h+='<h3>'+ph+' · rincian per jam</h3><table class="pw"><colgroup>'+cg+'</colgroup><thead><tr><th rowspan="2">No</th><th rowspan="2">Tanggal</th><th rowspan="2">Jam</th><th colspan="4" class="gp">PLAN</th><th colspan="4" class="ga">ACTUAL</th><th colspan="3" class="gd">SELISIH (Δ)</th><th rowspan="2">Keterangan</th></tr><tr><th class="c1">Power</th><th class="c1">GHE</th><th class="c1">Calcine t/h</th><th class="c1">Ton</th><th class="c2">Power</th><th class="c2">GHE</th><th class="c2">Calcine t/h</th><th class="c2">Ton</th><th class="c3">Power</th><th class="c3">GHE</th><th class="c3">Calcine</th></tr></thead><tbody>'+
   R.map((r,i)=>{const iv=im[r.schedule_id],du=iv?N(iv.duration_h):NaN,pc=iv?N(iv.planned_calcine):NaN,ac=iv?N(iv.actual_calcine):NaN,dl=(a,b)=>{const d=N(a)-N(b);return isNaN(d)?'':f2(d);};
    return '<tr><td>'+(i+1)+'</td><td>'+dPart(r.schedule_datetime)+'</td><td>'+tPart(r.schedule_datetime)+'</td><td>'+fnum(r.planned_power)+'</td><td>'+fnum(r.planned_ghe)+'</td><td>'+fnum(pc)+'</td><td>'+fnum(pc*du)+'</td><td>'+fnum(r.actual_power)+'</td><td>'+fnum(r.actual_ghe)+'</td><td>'+fnum(ac)+'</td><td>'+fnum(ac*du)+'</td><td>'+dl(r.actual_power,r.planned_power)+'</td><td>'+dl(r.actual_ghe,r.planned_ghe)+'</td><td>'+dl(ac,pc)+'</td><td>'+esc(r.remark||'')+'</td></tr>';}).join('')+'</tbody></table>';});
  const ac=(S.power.activities||[]).slice().sort((a,b)=>String(a.planned_datetime)<String(b.planned_datetime)?-1:1);
